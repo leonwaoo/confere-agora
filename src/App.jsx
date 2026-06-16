@@ -161,23 +161,23 @@ const modeOptions = [
     title: "Mensagem ou manchete",
     description: "Ideal para posts, legendas e textos recebidos por conversa.",
     emptyTitle: "Aguardando texto",
-    emptyChecks: ["Fonte e data", "Tom emocional", "Acusacoes ou promessas"],
+    emptyChecks: ["Fonte e data", "Tom emocional", "Acusações ou promessas"],
   },
   {
     id: "link",
     label: "Link",
     icon: Link2,
-    title: "Pagina ou noticia",
-    description: "A leitura segura tenta capturar titulo, descricao e trecho principal.",
+    title: "Página ou notícia",
+    description: "A leitura segura tenta capturar título, descrição e trecho principal.",
     emptyTitle: "Aguardando link",
-    emptyChecks: ["Dominio e HTTPS", "Titulo da pagina", "Conteudo extraido"],
+    emptyChecks: ["Domínio e HTTPS", "Título da página", "Conteúdo extraído"],
   },
   {
     id: "foto",
     label: "Foto",
     icon: Camera,
     title: "Imagem, print ou card",
-    description: "Analisa origem, qualidade e texto visivel quando houver imagem.",
+    description: "Analisa origem, qualidade e texto visível quando houver imagem.",
     emptyTitle: "Aguardando imagem",
     emptyChecks: ["Origem visual", "Texto aparente", "Cortes e contexto"],
   },
@@ -467,8 +467,8 @@ function analyzePhoto(file, imageMeta, description) {
         "missing-image-text",
         "medio",
         "Texto da imagem não informado",
-        "A verificacao complementar pode ler a imagem quando estiver configurada; sem ela, a regra precisa de transcricao.",
-        "Transcreva manchete, legenda ou texto visivel para melhorar a analise local.",
+        "A verificação complementar pode ler a imagem quando estiver configurada; sem ela, a regra precisa de transcrição.",
+        "Transcreva manchete, legenda ou texto visível para melhorar a análise local.",
       ),
     );
   }
@@ -555,8 +555,8 @@ function analyzeLink(rawUrl) {
       buildSignal(
         "invalid-link",
         "alto",
-        "Link invalido",
-        "O endereco informado nao parece ser um link publico em http ou https.",
+        "Link inválido",
+        "O endereço informado não parece ser um link público em http ou https.",
         "Confira se o link foi colado completo antes de compartilhar.",
       ),
     );
@@ -566,9 +566,9 @@ function analyzeLink(rawUrl) {
       type: "link",
       risk: calculateRisk(signals, 20),
       confidence: "media",
-      verificationSteps: ["Conferir o endereco original", "Buscar a pagina em fontes confiaveis"],
+      verificationSteps: ["Conferir o endereço original", "Buscar a página em fontes confiáveis"],
       signals,
-      summary: "Nao foi possivel reconhecer o link com seguranca. Confira o endereco antes de abrir ou repassar.",
+      summary: "Não foi possível reconhecer o link com segurança. Confira o endereço antes de abrir ou repassar.",
     };
   }
 
@@ -583,8 +583,8 @@ function analyzeLink(rawUrl) {
         "not-https",
         "medio",
         "Link sem HTTPS",
-        "A pagina usa um endereco sem conexao segura.",
-        "Prefira abrir a versao HTTPS ou procure a mesma informacao em fonte confiavel.",
+        "A página usa um endereço sem conexão segura.",
+        "Prefira abrir a versão HTTPS ou procure a mesma informação em fonte confiável.",
       ),
     );
   }
@@ -596,7 +596,7 @@ function analyzeLink(rawUrl) {
         "medio",
         "Link encurtado",
         "Links encurtados escondem o destino final e dificultam avaliar a fonte.",
-        "Abra com cautela e confirme o dominio real antes de compartilhar.",
+        "Abra com cautela e confirme o domínio real antes de compartilhar.",
       ),
     );
   }
@@ -606,9 +606,9 @@ function analyzeLink(rawUrl) {
       buildSignal(
         "sensational-url",
         "medio",
-        "Endereco com linguagem apelativa",
-        "O proprio link usa termos comuns em chamadas sensacionalistas ou enganosas.",
-        "Confira titulo, autor, data e contexto antes de confiar no conteudo.",
+        "Endereço com linguagem apelativa",
+        "O próprio link usa termos comuns em chamadas sensacionalistas ou enganosas.",
+        "Confira título, autor, data e contexto antes de confiar no conteúdo.",
       ),
     );
   }
@@ -629,8 +629,8 @@ function analyzeLink(rawUrl) {
         "link-needs-reading",
         "baixo",
         "Link reconhecido",
-        "O endereco foi reconhecido, mas a confiabilidade depende do conteudo da pagina.",
-        "Leia a materia completa e confira autor, data e fonte primaria.",
+        "O endereço foi reconhecido, mas a confiabilidade depende do conteúdo da página.",
+        "Leia a matéria completa e confira autor, data e fonte primária.",
       ),
     );
   }
@@ -643,8 +643,8 @@ function analyzeLink(rawUrl) {
     risk,
     confidence: "media",
     verificationSteps: [
-      "Abrir a pagina original",
-      "Conferir autor, data e veiculo",
+      "Abrir a página original",
+      "Conferir autor, data e veículo",
       "Comparar com fontes independentes ou oficiais",
     ],
     signals,
@@ -652,8 +652,8 @@ function analyzeLink(rawUrl) {
       risk.level === "alto"
         ? "O link apresenta sinais fortes de risco e precisa de checagem antes de ser compartilhado."
         : risk.level === "medio"
-          ? "O link tem pontos de atencao. Verifique origem, data e contexto."
-          : "O link foi reconhecido sem sinais fortes no endereco, mas ainda precisa de leitura e confirmacao.",
+          ? "O link tem pontos de atenção. Verifique origem, data e contexto."
+          : "O link foi reconhecido sem sinais fortes no endereço, mas ainda precisa de leitura e confirmação.",
   };
 }
 
@@ -666,7 +666,7 @@ function convertAiAnalysis(aiAnalysis) {
   const normalizedScore = rawScore > 0 && rawScore <= 1 ? rawScore * 100 : rawScore;
 
   return {
-    source: "Verificacao complementar",
+    source: "Verificação complementar",
     type: "ia",
     confidence: aiAnalysis.confidence,
     risk: {
@@ -778,7 +778,7 @@ function ModeTabs({ activeMode, onChange }) {
 
         return (
           <button
-            className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition ${
+            className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold transition ${
               isActive ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:text-slate-950"
             }`}
             key={option.id}
@@ -805,8 +805,8 @@ function EmptyState({ mode }) {
           <Icon size={24} />
         </span>
         <div>
-          <h2 className="text-lg font-black text-slate-950">{activeMode.emptyTitle}</h2>
-          <p className="text-sm leading-6 text-slate-600">O painel de resultado aparece aqui apos a checagem.</p>
+          <h2 className="text-lg font-bold text-slate-950">{activeMode.emptyTitle}</h2>
+          <p className="text-sm leading-6 text-slate-600">O painel de resultado aparece aqui após a checagem.</p>
         </div>
       </div>
 
@@ -840,18 +840,18 @@ function ResultMeter({ result }) {
             <Icon size={24} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Resultado final</p>
-            <h2 className={`text-2xl font-black ${style.text}`}>Risco {style.label}</h2>
+            <p className="text-sm font-semibold text-slate-500">Resultado final</p>
+            <h2 className={`text-2xl font-bold ${style.text}`}>Risco {style.label}</h2>
           </div>
         </div>
-        <span className={`rounded-full bg-white px-3 py-1 text-sm font-black ${style.text}`}>
+        <span className={`rounded-full bg-white px-3 py-1 text-sm font-bold ${style.text}`}>
           {result.risk.score}/100
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white">
         <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${result.risk.score}%` }} />
       </div>
-      <div className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-600">
+      <div className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
         {actionLabel}
       </div>
       <p className="mt-4 text-sm leading-6 text-slate-700">{result.summary}</p>
@@ -867,7 +867,7 @@ function SignalList({ title, icon: Icon, result }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-sm font-black text-slate-950">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-950">
           <Icon size={18} />
           {title}
         </h3>
@@ -909,18 +909,18 @@ function App() {
 
   const statusLabel = useMemo(() => {
     if (aiStatus.loading) {
-      return "verificando conexao";
+      return "Verificando conexão";
     }
 
     if (aiStatus.ok) {
-      return "verificacao ativa";
+      return "Verificação ativa";
     }
 
     if (aiStatus.needsApiKey) {
-      return "verificacao pendente";
+      return "Verificação pendente";
     }
 
-    return "verificacao indisponivel";
+    return "Verificação indisponível";
   }, [aiStatus]);
 
   useEffect(() => {
@@ -984,7 +984,7 @@ function App() {
           local: localResult,
           ai: null,
           final: localResult,
-          error: data.error || "A verificacao complementar nao respondeu.",
+          error: data.error || "A verificação complementar não respondeu.",
         });
         return;
       }
@@ -1059,7 +1059,7 @@ function App() {
                 />
               </div>
               <div>
-                <h1 className="text-2xl font-black tracking-normal text-slate-950">Confere Agora</h1>
+                <h1 className="text-2xl font-bold text-slate-950">Confere Agora</h1>
                 <p className="text-sm font-medium text-slate-600">Leia com calma. Confira sinais. Compartilhe melhor.</p>
               </div>
             </div>
@@ -1078,7 +1078,7 @@ function App() {
           <div className="mt-4 grid gap-2 sm:grid-cols-4">
             {workflowItems.map(([step, label]) => (
               <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-white px-3 py-2" key={step}>
-                <span className="text-xs font-black text-teal-700">{step}</span>
+                <span className="text-xs font-bold text-teal-700">{step}</span>
                 <span className="text-sm font-bold text-slate-700">{label}</span>
               </div>
             ))}
@@ -1090,13 +1090,13 @@ function App() {
             <div className="mb-5 flex flex-col gap-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-teal-700">Entrada</p>
-                  <h2 className="text-xl font-black text-slate-950">{currentMode.title}</h2>
+                  <p className="text-xs font-bold text-teal-700">Entrada</p>
+                  <h2 className="text-xl font-bold text-slate-950">{currentMode.title}</h2>
                   <p className="mt-1 text-sm leading-6 text-slate-600">{currentMode.description}</p>
                 </div>
-                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-xs font-black text-teal-800">
+                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-xs font-bold text-teal-800">
                   <StatusDot active={canAnalyze} />
-                  {canAnalyze ? "pronto para checar" : "aguardando entrada"}
+                  {canAnalyze ? "Pronto para checar" : "Aguardando entrada"}
                 </span>
               </div>
               <ModeTabs activeMode={mode} onChange={switchMode} />
@@ -1105,7 +1105,7 @@ function App() {
             {mode === "texto" ? (
               <div className="flex h-full flex-col gap-4">
                 <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm font-black text-slate-800" htmlFor="content-text">
+                  <label className="text-sm font-bold text-slate-800" htmlFor="content-text">
                     Conteúdo recebido
                   </label>
                   <span className="text-xs font-bold text-slate-500">{text.trim().length} caracteres</span>
@@ -1122,7 +1122,7 @@ function App() {
                 />
                 <div className="flex flex-wrap items-center gap-3">
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-black text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-slate-300"
                     type="button"
                     disabled={!canAnalyze || isAnalyzing}
                     onClick={handleAnalyze}
@@ -1175,21 +1175,21 @@ function App() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="rounded-lg border border-rose-100 bg-rose-50 p-3">
                     <ShieldAlert className="mb-2 text-rose-700" size={18} />
-                    <p className="text-sm font-black text-rose-900">Boato de saúde</p>
+                    <p className="text-sm font-bold text-rose-900">Boato de saúde</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-rose-800">
                       Exemplo realista de promessa de cura milagrosa.
                     </p>
                   </div>
                   <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
                     <FileText className="mb-2 text-amber-700" size={18} />
-                    <p className="text-sm font-black text-amber-900">Dados sem método</p>
+                    <p className="text-sm font-bold text-amber-900">Dados sem método</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-amber-800">
                       Números chamativos sem origem verificável.
                     </p>
                   </div>
                   <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
                     <AlertTriangle className="mb-2 text-indigo-700" size={18} />
-                    <p className="text-sm font-black text-indigo-950">Pressão emocional</p>
+                    <p className="text-sm font-bold text-indigo-950">Pressão emocional</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-indigo-900">
                       Linguagem de urgência para acelerar o compartilhamento.
                     </p>
@@ -1199,7 +1199,7 @@ function App() {
             ) : mode === "link" ? (
               <div className="flex h-full flex-col gap-4">
                 <div className="rounded-lg border border-teal-100 bg-[#f8fbfa] p-4">
-                  <label className="mb-2 block text-sm font-black text-slate-800" htmlFor="content-link">
+                  <label className="mb-2 block text-sm font-bold text-slate-800" htmlFor="content-link">
                     Link para verificar
                   </label>
                   <div className="flex flex-col gap-3 sm:flex-row">
@@ -1218,7 +1218,7 @@ function App() {
                       />
                     </div>
                     <button
-                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-black text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-slate-300"
+                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-slate-300"
                       type="button"
                       disabled={!canAnalyze || isAnalyzing}
                       onClick={handleAnalyze}
@@ -1232,21 +1232,21 @@ function App() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="rounded-lg border border-teal-100 bg-white p-4">
                     <ShieldCheck className="mb-3 text-teal-700" size={20} />
-                    <p className="text-sm font-black text-slate-950">Origem</p>
+                    <p className="text-sm font-bold text-slate-950">Origem</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
-                      Observa dominio, protocolo e destino final.
+                      Observa domínio, protocolo e destino final.
                     </p>
                   </div>
                   <div className="rounded-lg border border-amber-100 bg-white p-4">
                     <FileText className="mb-3 text-amber-700" size={20} />
-                    <p className="text-sm font-black text-slate-950">Conteudo</p>
+                    <p className="text-sm font-bold text-slate-950">Conteúdo</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
-                      Tenta ler titulo, descricao e trecho principal.
+                      Tenta ler título, descrição e trecho principal.
                     </p>
                   </div>
                   <div className="rounded-lg border border-rose-100 bg-white p-4">
                     <AlertTriangle className="mb-3 text-rose-700" size={20} />
-                    <p className="text-sm font-black text-slate-950">Cautela</p>
+                    <p className="text-sm font-bold text-slate-950">Cautela</p>
                     <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
                       Aponta encurtadores, apelos e sinais de risco.
                     </p>
@@ -1263,7 +1263,7 @@ function App() {
                     }}
                   >
                     <ShieldCheck size={17} />
-                    Exemplo confiavel
+                    Exemplo confiável
                   </button>
                   <button
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
@@ -1327,7 +1327,7 @@ function App() {
                       <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-white text-teal-700 shadow-sm">
                         <ImagePlus size={28} />
                       </span>
-                      <span className="max-w-md text-sm font-black text-slate-700">
+                      <span className="max-w-md text-sm font-bold text-slate-700">
                         Selecionar imagem, print ou card
                       </span>
                     </>
@@ -1338,11 +1338,11 @@ function App() {
                   <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700 sm:grid-cols-3">
                     <span>{photoMeta.width} × {photoMeta.height}px</span>
                     <span>{Math.round(photoMeta.size / 1024)} KB</span>
-                    <span>{photoMeta.type.replace("image/", "").toUpperCase()}</span>
+                    <span>{photoMeta.type.replace("image/", "")}</span>
                   </div>
                 ) : null}
 
-                <label className="text-sm font-black text-slate-800" htmlFor="image-description">
+                <label className="text-sm font-bold text-slate-800" htmlFor="image-description">
                   Texto visível na imagem
                 </label>
                 <textarea
@@ -1358,7 +1358,7 @@ function App() {
 
                 <div className="flex flex-wrap items-center gap-3">
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-black text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                     type="button"
                     disabled={!canAnalyze || isAnalyzing}
                     onClick={handleAnalyze}
@@ -1386,37 +1386,37 @@ function App() {
 
                 <section className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
                       <FileText size={15} />
                       Regras
                     </p>
                     <div className="flex items-center justify-between gap-3">
                       <RiskPill level={analysisState.local.risk.level} />
-                      <span className="text-sm font-black text-slate-900">{analysisState.local.risk.score}/100</span>
+                      <span className="text-sm font-bold text-slate-900">{analysisState.local.risk.score}/100</span>
                     </div>
                   </div>
 
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
                       <BrainCircuit size={15} />
-                      Verificacao complementar
+                      Verificação complementar
                     </p>
                     {analysisState.ai ? (
                       <div className="flex items-center justify-between gap-3">
                         <RiskPill level={analysisState.ai.risk.level} />
-                        <span className="text-sm font-black text-slate-900">{analysisState.ai.risk.score}/100</span>
+                        <span className="text-sm font-bold text-slate-900">{analysisState.ai.risk.score}/100</span>
                       </div>
                     ) : (
-                      <p className="text-sm font-bold text-amber-700">Indisponivel agora</p>
+                      <p className="text-sm font-bold text-amber-700">Indisponível agora</p>
                     )}
                   </div>
                 </section>
 
                 {analysisState.error ? (
                   <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                    <div className="mb-1 flex items-center gap-2 font-black">
+                    <div className="mb-1 flex items-center gap-2 font-bold">
                       <Info size={17} />
-                      Verificacao complementar indisponivel
+                      Verificação complementar indisponível
                     </div>
                     <p>{analysisState.error}</p>
                   </section>
@@ -1424,7 +1424,7 @@ function App() {
 
                 {analysisState.ai?.limitations ? (
                   <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
-                    <div className="mb-1 flex items-center gap-2 font-black text-slate-900">
+                    <div className="mb-1 flex items-center gap-2 font-bold text-slate-900">
                       <Info size={17} />
                       Limite da leitura
                     </div>
@@ -1433,10 +1433,10 @@ function App() {
                 ) : null}
 
                 <SignalList title="Análise por regras" icon={FileText} result={analysisState.local} />
-                <SignalList title="Verificacao complementar" icon={BrainCircuit} result={analysisState.ai} />
+                <SignalList title="Verificação complementar" icon={BrainCircuit} result={analysisState.ai} />
 
                 <section className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="mb-3 text-sm font-black text-slate-950">Próximas checagens</h3>
+                  <h3 className="mb-3 text-sm font-bold text-slate-950">Próximas checagens</h3>
                   <ul className="space-y-2 text-sm leading-6 text-slate-700">
                     {(analysisState.ai?.verificationSteps?.length
                       ? analysisState.ai.verificationSteps
@@ -1456,12 +1456,12 @@ function App() {
 
             {!aiStatus.loading && !aiStatus.ok ? (
               <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-black text-slate-950">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
                   <BrainCircuit size={18} />
-                  Configurar verificacao complementar
+                  Configurar verificação complementar
                 </h3>
                 <div className="space-y-2 text-sm leading-6 text-slate-700">
-                  <p>Adicione a variavel secreta no ambiente do deploy para liberar a verificacao para todos.</p>
+                  <p>Adicione a variável secreta no ambiente do deploy para liberar a verificação para todos.</p>
                   <code className="block rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
                     CLOUD_AI_API_KEY=sua_chave
                   </code>
