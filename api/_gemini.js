@@ -30,6 +30,12 @@ export const analysisSchema = {
   required: ["level", "score", "confidence", "summary", "signals", "verificationSteps", "limitations"],
 };
 
+const scoreRanges = {
+  baixo: { min: 0, max: 33 },
+  medio: { min: 34, max: 64 },
+  alto: { min: 65, max: 100 },
+};
+
 function readEnv(name) {
   const value = process.env[name];
 
@@ -55,6 +61,12 @@ Regras:
 - Se houver link, avalie titulo, descricao e trecho extraido da pagina. Considere dominio, autoria, data, fonte primaria e sinais de clickbait.
 - Responda em portugues do Brasil.
 - Retorne somente JSON aderente ao schema.
+- Seja conciso: resumo com ate 2 frases, no maximo 3 sinais e no maximo 3 proximas checagens.
+- Nao repita o mesmo motivo em sinais diferentes.
+- Use apenas evidencias presentes no texto, imagem, link ou conteudo extraido. Se algo nao foi lido, indique em limitations.
+- Score deve combinar com level: baixo 0-33, medio 34-64, alto 65-100.
+- Se a evidencia for fraca, prefira cautela e classifique como medio em vez de alto.
+- Classifique como alto quando houver acusacao grave sem fonte, promessa de cura/tratamento, golpe, fraude, pedido urgente de repasse ou dano potencial relevante.
 `;
 
 export function getCloudAiConfig() {
@@ -154,13 +166,88 @@ function normalizeGeminiJson(text) {
   return JSON.parse(withoutFence);
 }
 
-function normalizeAnalysis(analysis) {
-  const rawScore = Number(analysis.score);
-  const normalizedScore = rawScore > 0 && rawScore <= 1 ? rawScore * 100 : rawScore;
+function cleanText(value, maxLength, fallback = "") {
+  const text = String(value || fallback)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength - 3).trim()}...`;
+}
+
+function normalizeEnum(value, allowed, fallback) {
+  return allowed.includes(value) ? value : fallback;
+}
+
+function normalizeScore(score, level) {
+  const rawScore = Number(score);
+  const percentScore = rawScore > 0 && rawScore <= 1 ? rawScore * 100 : rawScore;
+  const range = scoreRanges[level] || scoreRanges.medio;
+  const bounded = Math.round(Math.max(0, Math.min(100, percentScore || range.min)));
+
+  return Math.max(range.min, Math.min(range.max, bounded));
+}
+
+function normalizeSignal(signal, index) {
+  const severity = normalizeEnum(signal?.severity, ["baixo", "medio", "alto"], "medio");
 
   return {
-    ...analysis,
-    score: Math.round(Math.max(0, Math.min(100, normalizedScore || 0))),
+    title: cleanText(signal?.title, 80, `Sinal ${index + 1}`),
+    severity,
+    detail: cleanText(signal?.detail, 190, "O conteudo exige verificacao antes do compartilhamento."),
+    recommendation: cleanText(signal?.recommendation, 160, "Confira fonte, data e contexto antes de compartilhar."),
+  };
+}
+
+function normalizeAnalysis(analysis) {
+  const level = normalizeEnum(analysis?.level, ["baixo", "medio", "alto"], "medio");
+  const confidence = normalizeEnum(analysis?.confidence, ["baixa", "media", "alta"], "media");
+  const signals = Array.isArray(analysis?.signals)
+    ? analysis.signals.slice(0, 3).map(normalizeSignal)
+    : [];
+  const verificationSteps = Array.isArray(analysis?.verificationSteps)
+    ? analysis.verificationSteps
+        .map((step) => cleanText(step, 120))
+        .filter(Boolean)
+        .slice(0, 3)
+    : [];
+
+  if (signals.length === 0) {
+    signals.push(
+      normalizeSignal(
+        {
+          severity: level,
+          title: "Checagem necessaria",
+          detail: "A verificacao complementar nao retornou sinais detalhados suficientes.",
+          recommendation: "Use o resultado por regras e confira a fonte original.",
+        },
+        0,
+      ),
+    );
+  }
+
+  return {
+    level,
+    score: normalizeScore(analysis?.score, level),
+    confidence,
+    summary: cleanText(
+      analysis?.summary,
+      240,
+      "A verificacao encontrou pontos que pedem cautela antes do compartilhamento.",
+    ),
+    signals,
+    verificationSteps:
+      verificationSteps.length > 0
+        ? verificationSteps
+        : ["Conferir a fonte original", "Verificar data e contexto", "Comparar com fonte confiavel"],
+    limitations: cleanText(
+      analysis?.limitations,
+      180,
+      "Analise limitada ao conteudo enviado e aos dados disponiveis no momento.",
+    ),
   };
 }
 

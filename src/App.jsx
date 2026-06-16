@@ -153,6 +153,43 @@ const shortenerDomains = [
   "encurtador.com.br",
 ];
 
+const modeOptions = [
+  {
+    id: "texto",
+    label: "Texto",
+    icon: FileText,
+    title: "Mensagem ou manchete",
+    description: "Ideal para posts, legendas e textos recebidos por conversa.",
+    emptyTitle: "Aguardando texto",
+    emptyChecks: ["Fonte e data", "Tom emocional", "Acusacoes ou promessas"],
+  },
+  {
+    id: "link",
+    label: "Link",
+    icon: Link2,
+    title: "Pagina ou noticia",
+    description: "A leitura segura tenta capturar titulo, descricao e trecho principal.",
+    emptyTitle: "Aguardando link",
+    emptyChecks: ["Dominio e HTTPS", "Titulo da pagina", "Conteudo extraido"],
+  },
+  {
+    id: "foto",
+    label: "Foto",
+    icon: Camera,
+    title: "Imagem, print ou card",
+    description: "Analisa origem, qualidade e texto visivel quando houver imagem.",
+    emptyTitle: "Aguardando imagem",
+    emptyChecks: ["Origem visual", "Texto aparente", "Cortes e contexto"],
+  },
+];
+
+const workflowItems = [
+  ["01", "Entrada"],
+  ["02", "Sinais"],
+  ["03", "Risco"],
+  ["04", "Checagens"],
+];
+
 function normalizeText(value) {
   return value
     .toLowerCase()
@@ -732,12 +769,71 @@ function StatusDot({ active }) {
   );
 }
 
+function ModeTabs({ activeMode, onChange }) {
+  return (
+    <div className="grid grid-cols-3 rounded-lg border border-teal-100 bg-[#eef7f4] p-1">
+      {modeOptions.map((option) => {
+        const Icon = option.icon;
+        const isActive = activeMode === option.id;
+
+        return (
+          <button
+            className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition ${
+              isActive ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:text-slate-950"
+            }`}
+            key={option.id}
+            type="button"
+            onClick={() => onChange(option.id)}
+          >
+            <Icon size={18} />
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function EmptyState({ mode }) {
+  const activeMode = modeOptions.find((option) => option.id === mode) || modeOptions[0];
+  const Icon = activeMode.icon;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+          <Icon size={24} />
+        </span>
+        <div>
+          <h2 className="text-lg font-black text-slate-950">{activeMode.emptyTitle}</h2>
+          <p className="text-sm leading-6 text-slate-600">O painel de resultado aparece aqui apos a checagem.</p>
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        {activeMode.emptyChecks.map((item) => (
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700" key={item}>
+            <CheckCircle2 className="text-teal-700" size={16} />
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ResultMeter({ result }) {
   const style = riskStyles[result.risk.level] || riskStyles.baixo;
   const Icon = style.icon;
+  const actionLabel =
+    result.risk.level === "alto"
+      ? "Pausar e checar"
+      : result.risk.level === "medio"
+        ? "Conferir contexto"
+        : "Seguir com cautela";
 
   return (
-    <section className={`rounded-lg border p-4 ${style.bg} ${style.border}`}>
+    <section className={`rounded-lg border p-4 shadow-soft ${style.bg} ${style.border}`}>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className={`flex h-11 w-11 items-center justify-center rounded-lg bg-white ${style.text}`}>
@@ -754,6 +850,9 @@ function ResultMeter({ result }) {
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white">
         <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${result.risk.score}%` }} />
+      </div>
+      <div className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-600">
+        {actionLabel}
       </div>
       <p className="mt-4 text-sm leading-6 text-slate-700">{result.summary}</p>
     </section>
@@ -774,9 +873,8 @@ function SignalList({ title, icon: Icon, result }) {
         </h3>
         <RiskPill level={result.risk.level} />
       </div>
-      <p className="mb-3 text-sm leading-6 text-slate-600">{result.summary}</p>
       <div className="space-y-3">
-        {result.signals.slice(0, 5).map((signal) => (
+        {result.signals.slice(0, 3).map((signal) => (
           <article className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={signal.id}>
             <div className="mb-1 flex items-center justify-between gap-2">
               <h4 className="text-sm font-bold text-slate-900">{signal.title}</h4>
@@ -807,6 +905,7 @@ function App() {
 
   const canAnalyze =
     mode === "texto" ? text.trim().length > 0 : mode === "link" ? linkUrl.trim().length > 0 : Boolean(photo);
+  const currentMode = modeOptions.find((option) => option.id === mode) || modeOptions[0];
 
   const statusLabel = useMemo(() => {
     if (aiStatus.loading) {
@@ -976,61 +1075,31 @@ function App() {
               </span>
             </div>
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-teal-100 bg-white p-3">
-              <p className="text-xs font-black uppercase tracking-wide text-teal-700">Calma</p>
-              <p className="mt-1 text-sm font-semibold leading-5 text-slate-700">Reduz impulso antes do clique.</p>
-            </div>
-            <div className="rounded-lg border border-indigo-100 bg-white p-3">
-              <p className="text-xs font-black uppercase tracking-wide text-indigo-700">Clareza</p>
-              <p className="mt-1 text-sm font-semibold leading-5 text-slate-700">Mostra sinais em linguagem simples.</p>
-            </div>
-            <div className="rounded-lg border border-amber-100 bg-white p-3">
-              <p className="text-xs font-black uppercase tracking-wide text-amber-700">Cuidado</p>
-              <p className="mt-1 text-sm font-semibold leading-5 text-slate-700">Sugere próximos passos de checagem.</p>
-            </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+            {workflowItems.map(([step, label]) => (
+              <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-white px-3 py-2" key={step}>
+                <span className="text-xs font-black text-teal-700">{step}</span>
+                <span className="text-sm font-bold text-slate-700">{label}</span>
+              </div>
+            ))}
           </div>
         </header>
 
         <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.7fr)]">
           <div className="rounded-lg border border-teal-100 bg-white p-4 shadow-soft sm:p-5">
-            <div className="mb-5 grid grid-cols-3 rounded-lg border border-teal-100 bg-[#eef7f4] p-1">
-              <button
-                className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition ${
-                  mode === "texto"
-                    ? "bg-white text-teal-800 shadow-sm"
-                    : "text-slate-600 hover:text-slate-950"
-                }`}
-                type="button"
-                onClick={() => switchMode("texto")}
-              >
-                <FileText size={18} />
-                Texto
-              </button>
-              <button
-                className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition ${
-                  mode === "link"
-                    ? "bg-white text-teal-800 shadow-sm"
-                    : "text-slate-600 hover:text-slate-950"
-                }`}
-                type="button"
-                onClick={() => switchMode("link")}
-              >
-                <Link2 size={18} />
-                Link
-              </button>
-              <button
-                className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition ${
-                  mode === "foto"
-                    ? "bg-white text-teal-800 shadow-sm"
-                    : "text-slate-600 hover:text-slate-950"
-                }`}
-                type="button"
-                onClick={() => switchMode("foto")}
-              >
-                <Camera size={18} />
-                Foto
-              </button>
+            <div className="mb-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-teal-700">Entrada</p>
+                  <h2 className="text-xl font-black text-slate-950">{currentMode.title}</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">{currentMode.description}</p>
+                </div>
+                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-xs font-black text-teal-800">
+                  <StatusDot active={canAnalyze} />
+                  {canAnalyze ? "pronto para checar" : "aguardando entrada"}
+                </span>
+              </div>
+              <ModeTabs activeMode={mode} onChange={switchMode} />
             </div>
 
             {mode === "texto" ? (
@@ -1353,6 +1422,16 @@ function App() {
                   </section>
                 ) : null}
 
+                {analysisState.ai?.limitations ? (
+                  <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+                    <div className="mb-1 flex items-center gap-2 font-black text-slate-900">
+                      <Info size={17} />
+                      Limite da leitura
+                    </div>
+                    <p>{analysisState.ai.limitations}</p>
+                  </section>
+                ) : null}
+
                 <SignalList title="Análise por regras" icon={FileText} result={analysisState.local} />
                 <SignalList title="Verificacao complementar" icon={BrainCircuit} result={analysisState.ai} />
 
@@ -1372,15 +1451,7 @@ function App() {
                 </section>
               </>
             ) : (
-              <section className="flex min-h-[420px] flex-col justify-center rounded-lg border border-slate-200 bg-white p-5 text-center shadow-soft">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
-                  <SearchCheck size={28} />
-                </div>
-                <h2 className="text-lg font-black text-slate-950">Pronto para conferir</h2>
-                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-600">
-                  O resultado combina regras locais com uma verificacao complementar feita no servidor.
-                </p>
-              </section>
+              <EmptyState mode={mode} />
             )}
 
             {!aiStatus.loading && !aiStatus.ok ? (
