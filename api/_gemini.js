@@ -104,7 +104,7 @@ Regras:
 - Responda em portugues do Brasil.
 - Retorne somente JSON aderente ao schema.
 - Seja conciso: resumo com 1 frase objetiva, motivo principal com 1 frase curta, no maximo 3 sinais e no maximo 3 proximas checagens.
-- O campo summary deve comecar com uma destas formulas objetivas: "Ha risco alto", "Ha risco medio", "Ha risco baixo", "Nao e possivel confirmar" ou "Faltam evidencias".
+- O campo summary deve comecar com uma destas formulas objetivas: "Há risco alto", "Há risco médio", "Há risco baixo", "Não é possível confirmar" ou "Faltam evidências".
 - Nao repita o mesmo motivo em sinais diferentes.
 - Use apenas evidencias presentes no texto, imagem, link ou conteudo extraido. Se algo nao foi lido, indique em limitations.
 - Score deve combinar com level: baixo 0-33, medio 34-64, alto 65-100.
@@ -283,7 +283,7 @@ function normalizeObjectiveSummary(summary, level) {
     220,
     "A verificacao encontrou pontos que pedem cautela antes do compartilhamento.",
   );
-  const startsObjectively = /^(Ha risco alto|Ha risco medio|Ha risco baixo|Nao e possivel confirmar|Faltam evidencias)/i.test(
+  const startsObjectively = /^(Há risco alto|Há risco médio|Há risco baixo|Não é possível confirmar|Faltam evidências|Ha risco alto|Ha risco medio|Ha risco baixo|Nao e possivel confirmar|Faltam evidencias)/i.test(
     text,
   );
 
@@ -292,7 +292,7 @@ function normalizeObjectiveSummary(summary, level) {
   }
 
   const prefix =
-    level === "alto" ? "Ha risco alto" : level === "medio" ? "Faltam evidencias" : "Nao e possivel confirmar";
+    level === "alto" ? "Há risco alto" : level === "medio" ? "Faltam evidências" : "Não é possível confirmar";
 
   return cleanText(`${prefix}: ${text}`, 240);
 }
