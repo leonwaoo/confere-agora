@@ -31,3 +31,26 @@ input {
 textarea {
   resize: vertical;
 }
+
+.risk-meter-fill {
+  transform-origin: left;
+  animation: risk-meter-grow 720ms ease-out both;
+  transition: width 720ms ease-out;
+}
+
+@keyframes risk-meter-grow {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .risk-meter-fill {
+    animation: none;
+    transition: none;
+  }
+}

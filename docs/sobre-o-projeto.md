@@ -1,0 +1,31 @@
+# Sobre o Projeto
+
+## Problema
+
+Mensagens falsas, prints fora de contexto, links suspeitos e manchetes alarmistas circulam rapidamente em redes sociais e aplicativos de conversa. Muitas pessoas compartilham esse conteúdo antes de conferir fonte, data, autoria, contexto ou evidências.
+
+## Solução
+
+O Confere Agora ajuda o usuário a pausar antes de compartilhar. A ferramenta analisa texto, link ou foto e apresenta um laudo curto com:
+
+- nível de risco;
+- motivo principal;
+- sinais encontrados;
+- categorias de risco;
+- avaliação se o material parece notícia;
+- próximos passos de checagem.
+
+## Diferencial
+
+O projeto combina regras locais explicáveis com verificação complementar em nuvem. Assim, o app continua oferecendo uma análise inicial mesmo se a API externa estiver indisponível.
+
+## Público
+
+- pessoas que recebem notícias e prints em redes sociais;
+- estudantes e professores;
+- criadores de conteúdo;
+- recrutadores avaliando projetos de frontend, produto e integração com IA.
+
+## Limites do Produto
+
+O Confere Agora não substitui jornalismo profissional, órgãos oficiais nem agências de checagem. Ele aponta risco e orienta próximos passos, sem declarar sozinho que algo é verdadeiro ou falso.

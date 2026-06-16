@@ -1,22 +1,27 @@
 # Confere Agora
 
-**Confere Agora** e um analisador de risco de desinformacao para textos, links, manchetes, posts, mensagens e imagens compartilhadas online.
+![React](https://img.shields.io/badge/React-18-0f766e)
+![Vite](https://img.shields.io/badge/Vite-7-115e59)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-14b8a6)
+![Vercel](https://img.shields.io/badge/Deploy-Vercel-111827)
+![Status](https://img.shields.io/badge/status-em_evolucao-0f766e)
 
-O objetivo do projeto e ajudar pessoas a perceber sinais de alerta antes de compartilhar uma informacao, sem substituir agencias de checagem, fontes oficiais ou trabalho jornalistico.
+**Confere Agora** é um analisador de risco de desinformação para textos, links, manchetes, posts, mensagens e imagens compartilhadas online.
 
-## Proposta
+Site público: [confere-agora.vercel.app](https://confere-agora.vercel.app/)
 
-Conteudos falsos ou enganosos costumam circular com linguagem alarmista, dados sem fonte, acusacoes sem evidencia, prints fora de contexto e pedidos urgentes de compartilhamento. O Confere Agora transforma esses sinais em uma analise simples, educativa e facil de entender.
+O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de compartilhar uma informação, sem substituir agências de checagem, fontes oficiais ou trabalho jornalístico.
 
 ## Funcionalidades
 
-- Analise de texto.
-- Analise de imagem.
-- Analise de link com leitura segura de pagina publica.
-- Regras locais explicaveis.
-- Verificacao complementar no servidor.
-- Fallback por regras caso a verificacao complementar esteja indisponivel.
-- Resultado com nivel de risco, sinais encontrados e proximas checagens.
+- Análise de texto, link e foto.
+- Leitura segura de páginas públicas para extrair título, descrição, domínio, autor e data quando disponíveis.
+- Verificação complementar em nuvem, sem depender do computador do desenvolvedor.
+- OCR pela verificação complementar para identificar texto visível em imagens.
+- Classificação por categorias: saúde, política, golpe financeiro, corrente emocional, notícia sem fonte, acusação grave, link suspeito e imagem fora de contexto.
+- Laudo curto com risco, motivo principal, sinais encontrados e próximos passos.
+- Botão para copiar ou baixar relatório em `.txt`.
+- Fallback por regras locais caso a verificação complementar esteja indisponível.
 
 ## Tecnologias
 
@@ -25,17 +30,29 @@ Conteudos falsos ou enganosos costumam circular com linguagem alarmista, dados s
 - Tailwind CSS
 - Lucide React
 - Vercel Functions
-- API de verificacao em nuvem
+- API de verificação em nuvem
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+  A["Usuário envia texto, link ou foto"] --> B["Regras locais no navegador"]
+  B --> C["Resultado preliminar"]
+  C --> D["Função serverless /api/analyze"]
+  D --> E["Leitura segura de link ou imagem"]
+  E --> F["Verificação complementar em nuvem"]
+  F --> G["Laudo final com risco, categorias e próximos passos"]
+```
 
 ## Como Rodar Localmente
 
 Requisitos:
 
-- Node.js instalado
-- pnpm instalado
-- chave de verificacao em nuvem para ativar a analise complementar
+- Node.js
+- pnpm
+- chave de verificação em nuvem para ativar a análise complementar
 
-Crie um arquivo `.env` com base em `.env.example`:
+Crie um arquivo `.env`:
 
 ```bash
 CLOUD_AI_API_KEY=sua_chave
@@ -48,7 +65,7 @@ pnpm install
 pnpm dev
 ```
 
-Depois, acesse:
+Acesse:
 
 ```bash
 http://127.0.0.1:5173
@@ -56,28 +73,24 @@ http://127.0.0.1:5173
 
 ## Deploy
 
-O projeto esta preparado para deploy na Vercel.
+O projeto está preparado para deploy na Vercel.
 
-Veja o guia:
+Guia: [Deploy e verificação na nuvem](docs/deploy-e-ia-na-nuvem.md)
 
-- [Deploy e verificacao na nuvem](docs/deploy-e-ia-na-nuvem.md)
+## Documentação
 
-## Principios do Produto
-
-- A ferramenta nao declara sozinha que algo e verdadeiro ou falso.
-- A analise deve ser explicavel para o usuario.
-- O foco e reduzir compartilhamentos impulsivos.
-- Conteudos sobre pessoas, instituicoes ou temas publicos devem receber cuidado extra.
-- Toda decisao importante do projeto deve ser documentada.
-
-## Status
-
-MVP com frontend, verificacao de texto, foto, link, regras locais e verificacao complementar no servidor.
-
-## Documentacao
-
-- [Ideia do projeto](docs/ideia-do-projeto.md)
+- [Sobre o projeto](docs/sobre-o-projeto.md)
+- [Arquitetura](docs/arquitetura.md)
 - [Escopo](docs/escopo.md)
 - [Roadmap](docs/roadmap.md)
-- [Decisoes](docs/decisoes.md)
-- [Deploy e verificacao na nuvem](docs/deploy-e-ia-na-nuvem.md)
+- [Decisões](docs/decisoes.md)
+- [Plano de testes](docs/plano-de-testes.md)
+- [Post para LinkedIn](docs/post-linkedin.md)
+
+## Princípios
+
+- A ferramenta não declara sozinha que algo é verdadeiro ou falso.
+- A análise deve ser explicável para o usuário.
+- O foco é reduzir compartilhamentos impulsivos.
+- Conteúdos sobre pessoas, instituições ou temas públicos recebem cuidado extra.
+- Toda decisão importante do projeto deve ser documentada.

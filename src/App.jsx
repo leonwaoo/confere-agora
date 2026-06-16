@@ -4,15 +4,20 @@ import {
   BrainCircuit,
   Camera,
   CheckCircle2,
+  Copy,
+  Download,
   FileText,
   ImagePlus,
   Info,
   Link2,
   Loader2,
+  Newspaper,
   RotateCcw,
   SearchCheck,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
+  Target,
   Upload,
 } from "lucide-react";
 
@@ -51,6 +56,36 @@ const riskStyles = {
     border: "border-rose-200",
     bar: "bg-rose-600",
     icon: ShieldAlert,
+  },
+};
+
+const categoryLabels = {
+  saude: "Saúde",
+  politica: "Política",
+  golpe: "Golpe financeiro",
+  corrente: "Corrente emocional",
+  noticia_sem_fonte: "Notícia sem fonte",
+  acusacao_grave: "Acusação grave",
+  imagem_fora_de_contexto: "Imagem fora de contexto",
+  link_suspeito: "Link suspeito",
+  outro: "Checagem geral",
+};
+
+const newsStatusContent = {
+  parece_noticia: {
+    label: "Parece notícia",
+    detail: "Há sinais de formato jornalístico, mas isso não confirma a informação.",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  },
+  nao_parece_noticia: {
+    label: "Não parece notícia",
+    detail: "O conteúdo se aproxima mais de mensagem, corrente, card ou opinião.",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
+  },
+  indefinido: {
+    label: "Formato indefinido",
+    detail: "Faltam elementos para dizer se o material veio de uma notícia.",
+    className: "border-slate-200 bg-slate-50 text-slate-700",
   },
 };
 
@@ -140,6 +175,37 @@ const seriousAccusationTerms = [
   "manipulacao",
 ];
 
+const scamTerms = [
+  "pix",
+  "boleto",
+  "senha",
+  "cpf",
+  "cartao",
+  "banco",
+  "brinde",
+  "premio",
+  "sorteio",
+  "promocao",
+  "gratis",
+  "clique aqui",
+  "resgate",
+];
+
+const newsFormatTerms = [
+  "reportagem",
+  "noticia",
+  "jornal",
+  "portal",
+  "redacao",
+  "editoria",
+  "agencia",
+  "publicado",
+  "atualizado",
+  "entrevista",
+  "segundo",
+  "apuracao",
+];
+
 const shortenerDomains = [
   "bit.ly",
   "tinyurl.com",
@@ -221,6 +287,170 @@ function calculateRisk(signals, baseScore = 0) {
   }
 
   return { level: "baixo", score };
+}
+
+function uniqueItems(items) {
+  return [...new Set(items.filter(Boolean))];
+}
+
+function inferRiskCategories(normalizedText, signals, mode = "texto") {
+  const signalIds = signals.map((signal) => signal.id);
+  const categories = [];
+
+  if (hasAny(normalizedText, healthTerms)) {
+    categories.push("saude");
+  }
+
+  if (hasAny(normalizedText, publicContextTerms) || hasAny(normalizedText, publicFigureTerms)) {
+    categories.push("politica");
+  }
+
+  if (hasAny(normalizedText, scamTerms)) {
+    categories.push("golpe");
+  }
+
+  if (signalIds.some((id) => ["urgent-share", "alarmist-language"].some((pattern) => id.includes(pattern)))) {
+    categories.push("corrente");
+  }
+
+  if (signalIds.some((id) => ["missing-source", "survey-missing-data", "numbers-without-context"].some((pattern) => id.includes(pattern)))) {
+    categories.push("noticia_sem_fonte");
+  }
+
+  if (signalIds.some((id) => ["serious-accusation", "public-figure-claim"].some((pattern) => id.includes(pattern)))) {
+    categories.push("acusacao_grave");
+  }
+
+  if (mode === "foto" || signalIds.some((id) => id.includes("image-source") || id.includes("screenshot"))) {
+    categories.push("imagem_fora_de_contexto");
+  }
+
+  if (mode === "link" || signalIds.some((id) => id.includes("shortened-link") || id.includes("not-https"))) {
+    categories.push("link_suspeito");
+  }
+
+  return uniqueItems(categories).slice(0, 4).length ? uniqueItems(categories).slice(0, 4) : ["outro"];
+}
+
+function assessNewsLike(rawText, { mode = "texto", linkUrl = "" } = {}) {
+  const original = String(rawText || "").trim();
+  const text = normalizeText(`${original} ${linkUrl}`);
+  const hasNewsSignals = hasAny(text, newsFormatTerms);
+  const hasByline = /\bpor\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ]+/.test(original);
+  const hasDate =
+    /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(original) ||
+    /\b\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}\b/i.test(original);
+  const hasMessagePressure = /(compartilhe|repasse|envie para todos|antes que apaguem|nao deixe morrer)/i.test(text);
+  const looksLikeNewsUrl = /(noticia|news|politica|saude|brasil|mundo|economia|reportagem)/i.test(linkUrl);
+
+  if (mode === "link" && (hasNewsSignals || looksLikeNewsUrl)) {
+    return {
+      status: "parece_noticia",
+      detail: "O link tem sinais de página jornalística; ainda é necessário conferir autoria, data e fonte primária.",
+    };
+  }
+
+  if ((hasByline && hasDate) || (hasNewsSignals && hasDate)) {
+    return {
+      status: "parece_noticia",
+      detail: "Há elementos de notícia, como data, autoria ou linguagem jornalística.",
+    };
+  }
+
+  if (hasMessagePressure || (!hasNewsSignals && mode !== "link" && original.length >= MIN_TEXT_LENGTH)) {
+    return {
+      status: "nao_parece_noticia",
+      detail: "O conteúdo não mostra elementos básicos de notícia, como veículo, autoria, data e contexto.",
+    };
+  }
+
+  return {
+    status: "indefinido",
+    detail: "Faltam elementos para confirmar se o conteúdo veio de uma notícia.",
+  };
+}
+
+function getMainReason(signals) {
+  const strongest = [...signals].sort((a, b) => b.weight - a.weight)[0];
+  return strongest?.title || "O conteúdo precisa de checagem antes de ser compartilhado.";
+}
+
+function buildResultExtras(rawText, signals, mode, context = {}) {
+  const normalized = normalizeText(rawText || "");
+
+  return {
+    categories: inferRiskCategories(normalized, signals, mode),
+    mainReason: getMainReason(signals),
+    isNewsLike: assessNewsLike(rawText, { mode, linkUrl: context.linkUrl || "" }),
+  };
+}
+
+function buildEvidenceBadges(result) {
+  if (!result) {
+    return [];
+  }
+
+  const badges = [];
+  const signals = result.signals || [];
+  const ids = signals.map((signal) => signal.id).join(" ");
+
+  if (/missing-source|source-limit|noticia_sem_fonte/.test(ids) || result.categories?.includes("noticia_sem_fonte")) {
+    badges.push("Fonte ausente");
+  }
+
+  if (/alarmist-language|urgent-share/.test(ids) || result.categories?.includes("corrente")) {
+    badges.push("Apelo emocional");
+  }
+
+  if (/numbers-without-context|survey-missing-data/.test(ids)) {
+    badges.push("Dados sem método");
+  }
+
+  if (result.categories?.includes("golpe")) {
+    badges.push("Possível golpe");
+  }
+
+  if (result.categories?.includes("saude")) {
+    badges.push("Saúde");
+  }
+
+  if (result.categories?.includes("politica")) {
+    badges.push("Política");
+  }
+
+  if (result.categories?.includes("imagem_fora_de_contexto")) {
+    badges.push("Imagem sem contexto");
+  }
+
+  if (result.categories?.includes("link_suspeito")) {
+    badges.push("Link exige cautela");
+  }
+
+  return uniqueItems(badges).slice(0, 6);
+}
+
+function normalizeCategories(categories) {
+  const normalized = Array.isArray(categories)
+    ? categories.filter((category) => categoryLabels[category]).slice(0, 4)
+    : [];
+
+  return normalized.length > 0 ? normalized : ["outro"];
+}
+
+function normalizeNewsAssessment(value) {
+  if (!value || !newsStatusContent[value.status]) {
+    return newsStatusContent.indefinido
+      ? {
+          status: "indefinido",
+          detail: newsStatusContent.indefinido.detail,
+        }
+      : null;
+  }
+
+  return {
+    status: value.status,
+    detail: value.detail || newsStatusContent[value.status].detail,
+  };
 }
 
 function analyzeText(rawText) {
@@ -380,12 +610,14 @@ function analyzeText(rawText) {
 
   const baseScore = hasPublicFigure && hasSeriousAccusation && !hasSource ? 20 : 0;
   const risk = calculateRisk(signals, baseScore);
+  const extras = buildResultExtras(original, signals, "texto");
 
   return {
     source: "Regras locais",
     type: "texto",
     risk,
     confidence: hasSeriousAccusation || hasSurveyContext ? "alta" : "media",
+    ...extras,
     verificationSteps: [
       "Procurar a fonte original",
       "Conferir data e contexto",
@@ -499,12 +731,14 @@ function analyzePhoto(file, imageMeta, description) {
   }
 
   const risk = calculateRisk(signals, 6);
+  const extras = buildResultExtras(description, signals, "foto");
 
   return {
     source: "Regras locais",
     type: "foto",
     risk,
     confidence: hasDescription ? "media" : "baixa",
+    ...extras,
     verificationSteps: [
       "Fazer busca reversa da imagem",
       "Procurar a publicação original",
@@ -566,6 +800,12 @@ function analyzeLink(rawUrl) {
       type: "link",
       risk: calculateRisk(signals, 20),
       confidence: "media",
+      categories: ["link_suspeito"],
+      mainReason: "Link inválido",
+      isNewsLike: {
+        status: "indefinido",
+        detail: "Não foi possível avaliar formato de notícia porque o link não foi reconhecido.",
+      },
       verificationSteps: ["Conferir o endereço original", "Buscar a página em fontes confiáveis"],
       signals,
       summary: "Não foi possível reconhecer o link com segurança. Confira o endereço antes de abrir ou repassar.",
@@ -636,12 +876,14 @@ function analyzeLink(rawUrl) {
   }
 
   const risk = calculateRisk(signals, 4);
+  const extras = buildResultExtras(readableUrl, signals, "link", { linkUrl: parsedUrl.toString() });
 
   return {
     source: "Regras locais",
     type: "link",
     risk,
     confidence: "media",
+    ...extras,
     verificationSteps: [
       "Abrir a página original",
       "Conferir autor, data e veículo",
@@ -674,6 +916,11 @@ function convertAiAnalysis(aiAnalysis) {
       score: Math.round(Math.max(0, Math.min(100, normalizedScore))),
     },
     summary: aiAnalysis.summary,
+    mainReason: aiAnalysis.mainReason,
+    categories: normalizeCategories(aiAnalysis.categories),
+    isNewsLike: normalizeNewsAssessment(aiAnalysis.isNewsLike),
+    extractedText: aiAnalysis.extractedText || "",
+    linkMetadata: aiAnalysis.linkMetadata || null,
     verificationSteps: aiAnalysis.verificationSteps || [],
     limitations: aiAnalysis.limitations,
     signals: (aiAnalysis.signals || []).map((signal, index) => ({
@@ -694,7 +941,59 @@ function chooseFinalResult(localResult, aiResult) {
 
   const riskOrder = { baixo: 1, medio: 2, alto: 3 };
   const aiIsHigher = riskOrder[aiResult.risk.level] >= riskOrder[localResult.risk.level];
-  return aiIsHigher ? aiResult : localResult;
+  const chosen = aiIsHigher ? aiResult : localResult;
+
+  return {
+    ...chosen,
+    categories: uniqueItems([...(chosen.categories || []), ...(aiResult.categories || [])]).slice(0, 4),
+    mainReason: chosen.mainReason || aiResult.mainReason || localResult.mainReason,
+    isNewsLike: aiResult.isNewsLike || chosen.isNewsLike,
+    extractedText: aiResult.extractedText || chosen.extractedText || "",
+    linkMetadata: aiResult.linkMetadata || chosen.linkMetadata || null,
+  };
+}
+
+function getModeLabel(mode) {
+  return modeOptions.find((option) => option.id === mode)?.label || "Conteúdo";
+}
+
+function createReportText({ result, localResult, aiResult, mode, input }) {
+  if (!result) {
+    return "";
+  }
+
+  const news = result.isNewsLike ? newsStatusContent[result.isNewsLike.status] : null;
+  const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
+  const badges = buildEvidenceBadges(result);
+  const signals = (result.signals || []).slice(0, 3);
+  const steps = (result.verificationSteps || []).slice(0, 3);
+  const inputPreview = String(input || "").replace(/\s+/g, " ").trim().slice(0, 260);
+
+  return [
+    "Confere Agora - Relatório de checagem",
+    `Data: ${new Date().toLocaleString("pt-BR")}`,
+    `Entrada: ${getModeLabel(mode)}`,
+    inputPreview ? `Conteúdo analisado: ${inputPreview}` : "",
+    "",
+    `Risco: ${riskStyles[result.risk.level]?.label || result.risk.level} (${result.risk.score}/100)`,
+    `Motivo principal: ${result.mainReason || result.summary}`,
+    `Resumo: ${result.summary}`,
+    news ? `Formato de notícia: ${news.label} - ${result.isNewsLike.detail}` : "",
+    categories.length ? `Categorias: ${categories.join(", ")}` : "",
+    badges.length ? `Selos: ${badges.join(", ")}` : "",
+    "",
+    "Sinais encontrados:",
+    ...signals.map((signal) => `- ${signal.title}: ${signal.detail}`),
+    "",
+    "Próximos passos:",
+    ...steps.map((step) => `- ${step}`),
+    "",
+    `Regras locais: ${localResult?.risk?.score ?? "-"} / 100`,
+    `Verificação complementar: ${aiResult?.risk?.score ?? "indisponível"} / 100`,
+    "Observação: este relatório indica risco e pontos de checagem; ele não substitui fontes oficiais, jornalismo profissional ou agências de checagem.",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
 }
 
 function fileToDataUrl(file) {
@@ -794,6 +1093,43 @@ function ModeTabs({ activeMode, onChange }) {
   );
 }
 
+function ModeCards({ activeMode, onChange }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      {modeOptions.map((option) => {
+        const Icon = option.icon;
+        const isActive = activeMode === option.id;
+
+        return (
+          <button
+            className={`group flex min-h-28 flex-col justify-between rounded-lg border p-4 text-left transition ${
+              isActive
+                ? "border-teal-500 bg-teal-50 text-teal-950 shadow-soft"
+                : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:bg-[#f8fbfa]"
+            }`}
+            key={option.id}
+            type="button"
+            onClick={() => onChange(option.id)}
+          >
+            <span className="flex items-center justify-between gap-3">
+              <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${isActive ? "bg-white text-teal-700" : "bg-slate-50 text-slate-600"}`}>
+                <Icon size={21} />
+              </span>
+              {isActive ? (
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-teal-700">Selecionado</span>
+              ) : null}
+            </span>
+            <span>
+              <span className="block text-base font-bold">{option.label}</span>
+              <span className="mt-1 block text-sm leading-5 text-slate-600">{option.description}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function EmptyState({ mode }) {
   const activeMode = modeOptions.find((option) => option.id === mode) || modeOptions[0];
   const Icon = activeMode.icon;
@@ -801,8 +1137,11 @@ function EmptyState({ mode }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
       <div className="mb-4 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+        <span className="relative flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
           <Icon size={24} />
+          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-teal-700 shadow-sm">
+            <Sparkles size={13} />
+          </span>
         </span>
         <div>
           <h2 className="text-lg font-bold text-slate-950">{activeMode.emptyTitle}</h2>
@@ -849,12 +1188,172 @@ function ResultMeter({ result }) {
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white">
-        <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${result.risk.score}%` }} />
+        <div className={`risk-meter-fill h-full rounded-full ${style.bar}`} style={{ width: `${result.risk.score}%` }} />
       </div>
       <div className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
         {actionLabel}
       </div>
       <p className="mt-4 text-sm leading-6 text-slate-700">{result.summary}</p>
+    </section>
+  );
+}
+
+function EvidenceBadges({ result }) {
+  const badges = buildEvidenceBadges(result);
+
+  if (badges.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+        <ShieldCheck size={18} />
+        Sinais de confiança
+      </h3>
+      <div className="flex flex-wrap gap-2">
+        {badges.map((badge) => (
+          <span
+            className="inline-flex min-h-8 items-center rounded-full border border-teal-100 bg-[#f2fbf8] px-3 text-xs font-bold text-teal-800"
+            key={badge}
+          >
+            {badge}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NewsAssessmentCard({ assessment }) {
+  if (!assessment) {
+    return null;
+  }
+
+  const content = newsStatusContent[assessment.status] || newsStatusContent.indefinido;
+
+  return (
+    <section className={`rounded-lg border p-4 ${content.className}`}>
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-bold">
+        <Newspaper size={18} />
+        {content.label}
+      </h3>
+      <p className="text-sm leading-6">{assessment.detail || content.detail}</p>
+    </section>
+  );
+}
+
+function LinkMetadataCard({ metadata }) {
+  if (!metadata) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+        <Link2 size={18} />
+        Dados lidos do link
+      </h3>
+      {metadata.readError ? (
+        <p className="text-sm leading-6 text-amber-700">{metadata.readError}</p>
+      ) : (
+        <div className="space-y-2 text-sm leading-6 text-slate-700">
+          {metadata.title ? <p><strong className="text-slate-950">Título:</strong> {metadata.title}</p> : null}
+          {metadata.siteName || metadata.domain ? (
+            <p><strong className="text-slate-950">Origem:</strong> {metadata.siteName || metadata.domain}</p>
+          ) : null}
+          {metadata.author ? <p><strong className="text-slate-950">Autor:</strong> {metadata.author}</p> : null}
+          {metadata.publishedDate ? <p><strong className="text-slate-950">Data:</strong> {metadata.publishedDate}</p> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ExtractedTextCard({ text }) {
+  if (!text) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
+        <FileText size={18} />
+        Texto detectado na imagem
+      </h3>
+      <p className="text-sm leading-6 text-slate-700">{text}</p>
+    </section>
+  );
+}
+
+function ReportCard({ result, reportText, feedback, onCopy, onDownload }) {
+  const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
+  const firstSteps = (result.verificationSteps || []).slice(0, 3);
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+            <Target size={18} />
+            Laudo curto
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            {result.mainReason || "O conteúdo precisa de checagem antes de ser compartilhado."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={onCopy}
+          >
+            <Copy size={16} />
+            Copiar
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
+            type="button"
+            onClick={onDownload}
+          >
+            <Download size={16} />
+            Baixar
+          </button>
+        </div>
+      </div>
+
+      {feedback ? <p className="mb-3 text-sm font-bold text-teal-700">{feedback}</p> : null}
+
+      <div className="grid gap-3">
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs font-bold text-slate-500">Resumo</p>
+          <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary}</p>
+        </div>
+
+        {categories.length ? (
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700" key={category}>
+                {category}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div>
+          <p className="mb-2 text-xs font-bold text-slate-500">Próximos passos</p>
+          <ul className="space-y-2 text-sm leading-6 text-slate-700">
+            {firstSteps.map((step) => (
+              <li className="flex gap-2" key={step}>
+                <CheckCircle2 className="mt-1 shrink-0 text-teal-700" size={16} />
+                <span>{step}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <textarea className="sr-only" readOnly value={reportText} />
     </section>
   );
 }
@@ -901,11 +1400,29 @@ function App() {
   const [aiStatus, setAiStatus] = useState({ loading: true, ok: false });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [reportFeedback, setReportFeedback] = useState("");
   const fileInputRef = useRef(null);
 
   const canAnalyze =
     mode === "texto" ? text.trim().length > 0 : mode === "link" ? linkUrl.trim().length > 0 : Boolean(photo);
   const currentMode = modeOptions.find((option) => option.id === mode) || modeOptions[0];
+  const reportInput =
+    mode === "texto"
+      ? text
+      : mode === "link"
+        ? linkUrl
+        : photoDescription || photo?.name || "Imagem enviada";
+  const reportText = useMemo(
+    () =>
+      createReportText({
+        result: analysisState.final,
+        localResult: analysisState.local,
+        aiResult: analysisState.ai,
+        mode,
+        input: reportInput,
+      }),
+    [analysisState.ai, analysisState.final, analysisState.local, mode, reportInput],
+  );
 
   const statusLabel = useMemo(() => {
     if (aiStatus.loading) {
@@ -953,6 +1470,7 @@ function App() {
       return;
     }
 
+    setReportFeedback("");
     const normalizedLinkUrl = mode === "link" ? parseUserUrl(linkUrl)?.toString() || linkUrl.trim() : "";
     const localResult =
       mode === "texto"
@@ -1016,6 +1534,35 @@ function App() {
     setPhotoDescription("");
     setLinkUrl("");
     setAnalysisState({ local: null, ai: null, final: null, error: "" });
+    setReportFeedback("");
+  }
+
+  async function handleCopyReport() {
+    if (!reportText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setReportFeedback("Relatório copiado.");
+    } catch {
+      setReportFeedback("Não foi possível copiar agora.");
+    }
+  }
+
+  function handleDownloadReport() {
+    if (!reportText) {
+      return;
+    }
+
+    const blob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "confere-agora-relatorio.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+    setReportFeedback("Relatório baixado.");
   }
 
   async function handleFile(file) {
@@ -1025,6 +1572,7 @@ function App() {
 
     setPhoto(file);
     setAnalysisState({ local: null, ai: null, final: null, error: "" });
+    setReportFeedback("");
 
     try {
       const prepared = await prepareImageForCloud(file);
@@ -1043,6 +1591,7 @@ function App() {
   function switchMode(nextMode) {
     setMode(nextMode);
     setAnalysisState({ local: null, ai: null, final: null, error: "" });
+    setReportFeedback("");
   }
 
   return (
@@ -1099,7 +1648,7 @@ function App() {
                   {canAnalyze ? "Pronto para checar" : "Aguardando entrada"}
                 </span>
               </div>
-              <ModeTabs activeMode={mode} onChange={switchMode} />
+              <ModeCards activeMode={mode} onChange={switchMode} />
             </div>
 
             {mode === "texto" ? (
@@ -1118,6 +1667,7 @@ function App() {
                   onChange={(event) => {
                     setText(event.target.value);
                     setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                    setReportFeedback("");
                   }}
                 />
                 <div className="flex flex-wrap items-center gap-3">
@@ -1136,6 +1686,7 @@ function App() {
                     onClick={() => {
                       setText(claimSample);
                       setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                      setReportFeedback("");
                     }}
                   >
                     <ShieldAlert size={17} />
@@ -1147,6 +1698,7 @@ function App() {
                     onClick={() => {
                       setText(sampleText);
                       setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                      setReportFeedback("");
                     }}
                   >
                     <FileText size={17} />
@@ -1158,6 +1710,7 @@ function App() {
                     onClick={() => {
                       setText(manipulationSample);
                       setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                      setReportFeedback("");
                     }}
                   >
                     <AlertTriangle size={17} />
@@ -1214,6 +1767,7 @@ function App() {
                         onChange={(event) => {
                           setLinkUrl(event.target.value);
                           setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                          setReportFeedback("");
                         }}
                       />
                     </div>
@@ -1260,6 +1814,7 @@ function App() {
                     onClick={() => {
                       setLinkUrl("https://www.gov.br/saude/pt-br");
                       setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                      setReportFeedback("");
                     }}
                   >
                     <ShieldCheck size={17} />
@@ -1271,6 +1826,7 @@ function App() {
                     onClick={() => {
                       setLinkUrl("http://bit.ly/promocao-urgente-cura-milagrosa");
                       setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                      setReportFeedback("");
                     }}
                   >
                     <AlertTriangle size={17} />
@@ -1353,6 +1909,7 @@ function App() {
                   onChange={(event) => {
                     setPhotoDescription(event.target.value);
                     setAnalysisState({ local: null, ai: null, final: null, error: "" });
+                    setReportFeedback("");
                   }}
                 />
 
@@ -1383,6 +1940,17 @@ function App() {
             {analysisState.final ? (
               <>
                 <ResultMeter result={analysisState.final} />
+                <ReportCard
+                  result={analysisState.final}
+                  reportText={reportText}
+                  feedback={reportFeedback}
+                  onCopy={handleCopyReport}
+                  onDownload={handleDownloadReport}
+                />
+                <EvidenceBadges result={analysisState.final} />
+                <NewsAssessmentCard assessment={analysisState.final.isNewsLike} />
+                <LinkMetadataCard metadata={analysisState.final.linkMetadata || analysisState.ai?.linkMetadata} />
+                <ExtractedTextCard text={analysisState.final.extractedText || analysisState.ai?.extractedText} />
 
                 <section className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
@@ -1434,21 +2002,6 @@ function App() {
 
                 <SignalList title="Análise por regras" icon={FileText} result={analysisState.local} />
                 <SignalList title="Verificação complementar" icon={BrainCircuit} result={analysisState.ai} />
-
-                <section className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="mb-3 text-sm font-bold text-slate-950">Próximas checagens</h3>
-                  <ul className="space-y-2 text-sm leading-6 text-slate-700">
-                    {(analysisState.ai?.verificationSteps?.length
-                      ? analysisState.ai.verificationSteps
-                      : analysisState.local.verificationSteps
-                    ).map((step) => (
-                      <li className="flex gap-2" key={step}>
-                        <CheckCircle2 className="mt-1 shrink-0 text-teal-700" size={16} />
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
               </>
             ) : (
               <EmptyState mode={mode} />

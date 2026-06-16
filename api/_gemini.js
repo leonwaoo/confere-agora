@@ -8,6 +8,33 @@ export const analysisSchema = {
     score: { type: "number" },
     confidence: { type: "string", enum: ["baixa", "media", "alta"] },
     summary: { type: "string" },
+    mainReason: { type: "string" },
+    categories: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: [
+          "saude",
+          "politica",
+          "golpe",
+          "corrente",
+          "noticia_sem_fonte",
+          "acusacao_grave",
+          "imagem_fora_de_contexto",
+          "link_suspeito",
+          "outro",
+        ],
+      },
+    },
+    isNewsLike: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["parece_noticia", "nao_parece_noticia", "indefinido"] },
+        detail: { type: "string" },
+      },
+      required: ["status", "detail"],
+    },
+    extractedText: { type: "string" },
     signals: {
       type: "array",
       items: {
@@ -27,7 +54,19 @@ export const analysisSchema = {
     },
     limitations: { type: "string" },
   },
-  required: ["level", "score", "confidence", "summary", "signals", "verificationSteps", "limitations"],
+  required: [
+    "level",
+    "score",
+    "confidence",
+    "summary",
+    "mainReason",
+    "categories",
+    "isNewsLike",
+    "extractedText",
+    "signals",
+    "verificationSteps",
+    "limitations",
+  ],
 };
 
 const scoreRanges = {
@@ -59,9 +98,13 @@ Regras:
 - Textos curtos com acusacao grave sem fonte nao devem ser tratados como baixo risco.
 - Se houver imagem, considere texto visivel, contexto visual, cortes, ausencia de fonte, sinais de print/card e possivel falta de contexto.
 - Se houver link, avalie titulo, descricao e trecho extraido da pagina. Considere dominio, autoria, data, fonte primaria e sinais de clickbait.
+- Se houver imagem, extraia no campo extractedText o texto visivel que conseguir ler. Se nao houver texto, retorne string vazia.
+- Avalie se o material parece uma noticia jornalistica real: use isNewsLike.status como parece_noticia, nao_parece_noticia ou indefinido.
+- Diferencie tipos de risco em categories: saude, politica, golpe, corrente, noticia_sem_fonte, acusacao_grave, imagem_fora_de_contexto, link_suspeito ou outro.
 - Responda em portugues do Brasil.
 - Retorne somente JSON aderente ao schema.
-- Seja conciso: resumo com 1 frase objetiva, no maximo 3 sinais e no maximo 3 proximas checagens.
+- Seja conciso: resumo com 1 frase objetiva, motivo principal com 1 frase curta, no maximo 3 sinais e no maximo 3 proximas checagens.
+- O campo summary deve comecar com uma destas formulas objetivas: "Ha risco alto", "Ha risco medio", "Ha risco baixo", "Nao e possivel confirmar" ou "Faltam evidencias".
 - Nao repita o mesmo motivo em sinais diferentes.
 - Use apenas evidencias presentes no texto, imagem, link ou conteudo extraido. Se algo nao foi lido, indique em limitations.
 - Score deve combinar com level: baixo 0-33, medio 34-64, alto 65-100.
@@ -201,6 +244,59 @@ function normalizeScore(score, level) {
   return Math.max(range.min, Math.min(range.max, bounded));
 }
 
+const allowedCategories = [
+  "saude",
+  "politica",
+  "golpe",
+  "corrente",
+  "noticia_sem_fonte",
+  "acusacao_grave",
+  "imagem_fora_de_contexto",
+  "link_suspeito",
+  "outro",
+];
+
+function normalizeCategories(categories) {
+  const normalized = Array.isArray(categories)
+    ? categories.filter((category) => allowedCategories.includes(category)).slice(0, 4)
+    : [];
+
+  return normalized.length > 0 ? normalized : ["outro"];
+}
+
+function normalizeNewsLike(value) {
+  const status = normalizeEnum(value?.status, ["parece_noticia", "nao_parece_noticia", "indefinido"], "indefinido");
+
+  return {
+    status,
+    detail: cleanText(
+      value?.detail,
+      160,
+      "Nao ha informacao suficiente para confirmar se o material segue formato jornalistico.",
+    ),
+  };
+}
+
+function normalizeObjectiveSummary(summary, level) {
+  const text = cleanText(
+    summary,
+    220,
+    "A verificacao encontrou pontos que pedem cautela antes do compartilhamento.",
+  );
+  const startsObjectively = /^(Ha risco alto|Ha risco medio|Ha risco baixo|Nao e possivel confirmar|Faltam evidencias)/i.test(
+    text,
+  );
+
+  if (startsObjectively) {
+    return text;
+  }
+
+  const prefix =
+    level === "alto" ? "Ha risco alto" : level === "medio" ? "Faltam evidencias" : "Nao e possivel confirmar";
+
+  return cleanText(`${prefix}: ${text}`, 240);
+}
+
 function normalizeSignal(signal, index) {
   const severity = normalizeEnum(signal?.severity, ["baixo", "medio", "alto"], "medio");
 
@@ -243,11 +339,15 @@ function normalizeAnalysis(analysis) {
     level,
     score: normalizeScore(analysis?.score, level),
     confidence,
-    summary: cleanText(
-      analysis?.summary,
-      240,
-      "A verificacao encontrou pontos que pedem cautela antes do compartilhamento.",
+    summary: normalizeObjectiveSummary(analysis?.summary, level),
+    mainReason: cleanText(
+      analysis?.mainReason,
+      160,
+      signals[0]?.title || "O conteudo precisa de checagem antes do compartilhamento.",
     ),
+    categories: normalizeCategories(analysis?.categories),
+    isNewsLike: normalizeNewsLike(analysis?.isNewsLike),
+    extractedText: cleanText(analysis?.extractedText, 320, ""),
     signals,
     verificationSteps:
       verificationSteps.length > 0
@@ -264,6 +364,29 @@ function normalizeAnalysis(analysis) {
 function extractTextFromGemini(data) {
   const parts = data?.candidates?.[0]?.content?.parts || [];
   return parts.map((part) => part.text || "").join("").trim();
+}
+
+function normalizeLinkMetadata(linkContent) {
+  if (!linkContent || linkContent.readError) {
+    return linkContent
+      ? {
+          url: linkContent.url || "",
+          readError: cleanText(linkContent.readError, 160),
+        }
+      : null;
+  }
+
+  return {
+    url: linkContent.url || "",
+    finalUrl: linkContent.finalUrl || "",
+    domain: cleanText(linkContent.domain, 80),
+    siteName: cleanText(linkContent.siteName, 90),
+    title: cleanText(linkContent.title || linkContent.h1, 160),
+    description: cleanText(linkContent.description, 220),
+    author: cleanText(linkContent.author, 100),
+    publishedDate: cleanText(linkContent.publishedDate, 80),
+    canonicalUrl: linkContent.canonicalUrl || "",
+  };
 }
 
 function normalizeHostname(hostname) {
@@ -432,6 +555,33 @@ function extractMetaContent(html, name) {
   return decodeHtmlEntities(match?.[1] || match?.[2] || "").trim();
 }
 
+function extractLinkHref(html, rel) {
+  const escapedRel = rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(
+    `<link[^>]+rel=["'][^"']*${escapedRel}[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>|<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*${escapedRel}[^"']*["'][^>]*>`,
+    "i",
+  );
+  const match = html.match(regex);
+  return decodeHtmlEntities(match?.[1] || match?.[2] || "").trim();
+}
+
+function extractPublishedDate(html) {
+  return (
+    extractMetaContent(html, "article:published_time") ||
+    extractMetaContent(html, "og:published_time") ||
+    extractMetaContent(html, "datePublished") ||
+    extractMetaContent(html, "pubdate") ||
+    decodeHtmlEntities(
+      html.match(/<time[^>]+datetime=["']([^"']+)["'][^>]*>/i)?.[1] ||
+        html.match(/<time[^>]*>([\s\S]*?)<\/time>/i)?.[1] ||
+        "",
+    )
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
 function stripHtml(html) {
   return decodeHtmlEntities(
     String(html || "")
@@ -445,7 +595,8 @@ function stripHtml(html) {
   );
 }
 
-function summarizeHtml(html) {
+function summarizeHtml(html, finalUrl) {
+  const parsedUrl = new URL(finalUrl);
   const title = decodeHtmlEntities(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").trim();
   const h1 = decodeHtmlEntities(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "")
     .replace(/<[^>]+>/g, " ")
@@ -455,9 +606,26 @@ function summarizeHtml(html) {
     extractMetaContent(html, "description") ||
     extractMetaContent(html, "og:description") ||
     extractMetaContent(html, "twitter:description");
+  const siteName = extractMetaContent(html, "og:site_name") || parsedUrl.hostname.replace(/^www\./, "");
+  const author =
+    extractMetaContent(html, "author") ||
+    extractMetaContent(html, "article:author") ||
+    extractMetaContent(html, "twitter:creator");
+  const publishedDate = extractPublishedDate(html);
+  const canonicalUrl = extractLinkHref(html, "canonical");
   const excerpt = stripHtml(html).slice(0, 3_200);
 
-  return { title, h1, description, excerpt };
+  return {
+    title,
+    h1,
+    description,
+    siteName,
+    domain: parsedUrl.hostname.replace(/^www\./, ""),
+    author,
+    publishedDate,
+    canonicalUrl: canonicalUrl ? new URL(canonicalUrl, parsedUrl).toString() : "",
+    excerpt,
+  };
 }
 
 export async function extractLinkContent(rawUrl) {
@@ -483,7 +651,7 @@ export async function extractLinkContent(rawUrl) {
       url: rawUrl,
       finalUrl,
       statusCode: response.status,
-      ...summarizeHtml(html),
+      ...summarizeHtml(html, finalUrl),
     };
   } catch (error) {
     return {
@@ -551,7 +719,10 @@ export async function analyzeWithGemini(payload) {
     const text = extractTextFromGemini(data);
     const parsed = normalizeAnalysis(normalizeGeminiJson(text));
 
-    return parsed;
+    return {
+      ...parsed,
+      linkMetadata: normalizeLinkMetadata(linkContent),
+    };
   } finally {
     clearTimeout(timeout);
   }

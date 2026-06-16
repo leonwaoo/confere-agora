@@ -50,6 +50,30 @@ Decisao: preparar o projeto para deploy na Vercel.
 
 Motivo: Vercel oferece hospedagem simples para Vite e suporta funcoes serverless em `api/`, o que atende bem ao MVP.
 
+## 2026-06-16 - Laudo curto
+
+Decisao: apresentar o resultado como um laudo curto com risco, motivo principal, sinais, categorias e proximas checagens.
+
+Motivo: o usuario precisa entender rapidamente por que deve ter cautela antes de compartilhar.
+
+## 2026-06-16 - Relatorio copiavel
+
+Decisao: permitir copiar ou baixar o relatorio da verificacao em arquivo `.txt`.
+
+Motivo: o recurso torna o projeto mais util para estudo, compartilhamento responsavel e demonstracao em portfolio.
+
+## 2026-06-16 - Checagem de formato de noticia
+
+Decisao: indicar se o conteudo parece noticia, nao parece noticia ou tem formato indefinido.
+
+Motivo: muitos boatos se apresentam como noticia, mas nao mostram autoria, data, veiculo, fonte primaria ou contexto.
+
+## 2026-06-16 - OCR pela verificacao complementar
+
+Decisao: solicitar que a verificacao complementar leia texto visivel em imagens quando possivel.
+
+Motivo: prints e cards frequentemente carregam a alegacao principal dentro da imagem, e depender apenas de transcricao manual reduz a utilidade da ferramenta.
+
 ## Decisoes Pendentes
 
 - URL final do deploy.
