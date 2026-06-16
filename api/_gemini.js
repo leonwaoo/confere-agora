@@ -61,7 +61,7 @@ Regras:
 - Se houver link, avalie titulo, descricao e trecho extraido da pagina. Considere dominio, autoria, data, fonte primaria e sinais de clickbait.
 - Responda em portugues do Brasil.
 - Retorne somente JSON aderente ao schema.
-- Seja conciso: resumo com ate 2 frases, no maximo 3 sinais e no maximo 3 proximas checagens.
+- Seja conciso: resumo com 1 frase objetiva, no maximo 3 sinais e no maximo 3 proximas checagens.
 - Nao repita o mesmo motivo em sinais diferentes.
 - Use apenas evidencias presentes no texto, imagem, link ou conteudo extraido. Se algo nao foi lido, indique em limitations.
 - Score deve combinar com level: baixo 0-33, medio 34-64, alto 65-100.
@@ -175,7 +175,17 @@ function cleanText(value, maxLength, fallback = "") {
     return text;
   }
 
-  return `${text.slice(0, maxLength - 3).trim()}...`;
+  const clipped = text.slice(0, maxLength - 3).trim();
+  const sentenceEnd = Math.max(clipped.lastIndexOf(". "), clipped.lastIndexOf("! "), clipped.lastIndexOf("? "));
+
+  if (sentenceEnd > maxLength * 0.45) {
+    return clipped.slice(0, sentenceEnd + 1).trim();
+  }
+
+  const lastSpace = clipped.lastIndexOf(" ");
+  const safeClip = lastSpace > maxLength * 0.55 ? clipped.slice(0, lastSpace) : clipped;
+
+  return `${safeClip.trim()}...`;
 }
 
 function normalizeEnum(value, allowed, fallback) {
