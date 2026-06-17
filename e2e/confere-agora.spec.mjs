@@ -59,7 +59,13 @@ test("analisa texto e mostra laudo curto", async ({ page }) => {
   await expect(page.getByText(/Risco Alto/i).first()).toBeVisible();
   await expect(page.getByText(/Laudo curto/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Copiar/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Baixar/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /PDF/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /TXT/i })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /PDF/i }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("confere-agora-laudo.pdf");
 });
 
 test("analisa link e mostra confiabilidade da fonte", async ({ page }) => {
@@ -101,8 +107,9 @@ test("abre pagina visual de relatorio", async ({ page }) => {
   await page.getByRole("button", { name: /Página/i }).click();
 
   await expect(page.getByText(/Laudo visual para compartilhar/i)).toBeVisible();
-  await expect(page.getByText(/Relatório de checagem/i)).toBeVisible();
+  await expect(page.getByText(/Laudo de checagem/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Imprimir/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /PDF/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Imagem/i })).toBeVisible();
 });
 

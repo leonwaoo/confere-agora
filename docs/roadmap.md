@@ -55,12 +55,13 @@ Status: preparado
 
 ## Etapa 6 - Refinamento de Produto
 
-Status: proxima etapa
+Status: em andamento
 
 - responsividade fina;
 - melhorias visuais;
 - exemplos de textos para teste;
 - exemplos de links para teste;
+- laudo visual com exportacao em imagem, texto e PDF;
 - README mais completo;
 - prints ou video de demonstracao;
 - deploy publico com URL final.

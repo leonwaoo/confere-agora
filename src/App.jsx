@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  FileDown,
   FileText,
   GraduationCap,
   History,
@@ -42,6 +43,8 @@ const MIN_TEXT_LENGTH = 18;
 const HISTORY_STORAGE_KEY = "confere-agora:history:v1";
 const REPORT_STORAGE_KEY = "confere-agora:current-report:v1";
 const MAX_HISTORY_ITEMS = 8;
+const REPORT_LIMIT_NOTICE =
+  "Este laudo aponta risco e sinais de verificação. Ele não substitui fonte oficial, jornalismo profissional, agência de checagem ou orientação especializada.";
 
 const sampleText =
   "Levantamento mostra que 92% das pessoas mudaram de opinião, mas não informa instituto, amostra, data nem metodologia.";
@@ -998,7 +1001,7 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
     "",
     `Regras locais: ${localResult?.risk?.score ?? "-"} / 100`,
     `Verificação complementar: ${aiResult?.risk?.score ?? "indisponível"} / 100`,
-    "Observação: este relatório indica risco e pontos de checagem; ele não substitui fontes oficiais, jornalismo profissional ou agências de checagem.",
+    `Observação: ${REPORT_LIMIT_NOTICE}`,
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -1058,6 +1061,252 @@ function createHistoryItem({ result, localResult, aiResult, mode, input, reportT
 function truncateText(value, maxLength = 120) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 3).trim()}...` : text;
+}
+
+function hexToRgb(hex) {
+  const clean = hex.replace("#", "");
+  return [
+    parseInt(clean.slice(0, 2), 16),
+    parseInt(clean.slice(2, 4), 16),
+    parseInt(clean.slice(4, 6), 16),
+  ];
+}
+
+function setPdfFill(doc, hex) {
+  doc.setFillColor(...hexToRgb(hex));
+}
+
+function setPdfDraw(doc, hex) {
+  doc.setDrawColor(...hexToRgb(hex));
+}
+
+function setPdfText(doc, hex) {
+  doc.setTextColor(...hexToRgb(hex));
+}
+
+function getRiskPalette(level) {
+  if (level === "alto") {
+    return { strong: "#be123c", soft: "#fff1f2", border: "#fecdd3" };
+  }
+
+  if (level === "medio") {
+    return { strong: "#b45309", soft: "#fffbeb", border: "#fde68a" };
+  }
+
+  return { strong: "#047857", soft: "#ecfdf5", border: "#bbf7d0" };
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function imageSrcToDataUrl(src) {
+  const image = await loadImage(src);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
+async function createReportPdfBlob({ result, mode, input, createdAt }) {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 42;
+  const contentWidth = pageWidth - margin * 2;
+  const riskLabel = riskStyles[result.risk.level]?.label || result.risk.level;
+  const riskPalette = getRiskPalette(result.risk.level);
+  const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
+  const badges = buildEvidenceBadges(result);
+  const signals = (result.signals || []).slice(0, 4);
+  const steps = (result.verificationSteps || []).slice(0, 4);
+  const generatedAt = createdAt ? new Date(createdAt) : new Date();
+  const generatedAtLabel = Number.isNaN(generatedAt.getTime())
+    ? new Date().toLocaleString("pt-BR")
+    : generatedAt.toLocaleString("pt-BR");
+  let y = 48;
+
+  const paintBackground = () => {
+    setPdfFill(doc, "#f3faf6");
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    setPdfFill(doc, "#ffffff");
+    doc.roundedRect(margin - 10, 28, contentWidth + 20, pageHeight - 56, 14, 14, "F");
+    setPdfDraw(doc, "#cfe9dc");
+    doc.roundedRect(margin - 10, 28, contentWidth + 20, pageHeight - 56, 14, 14, "S");
+  };
+
+  const addPageIfNeeded = (neededHeight) => {
+    if (y + neededHeight <= pageHeight - 84) {
+      return;
+    }
+
+    doc.addPage();
+    paintBackground();
+    y = 54;
+  };
+
+  const writeTitle = (label) => {
+    addPageIfNeeded(42);
+    setPdfText(doc, "#0f172a");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(label, margin, y);
+    y += 18;
+  };
+
+  const writeBody = (text, options = {}) => {
+    const size = options.size || 10.5;
+    const lineHeight = options.lineHeight || 16;
+    const color = options.color || "#334155";
+    const font = options.font || "normal";
+    const lines = doc.splitTextToSize(String(text || ""), options.width || contentWidth);
+    addPageIfNeeded(lines.length * lineHeight + 8);
+    setPdfText(doc, color);
+    doc.setFont("helvetica", font);
+    doc.setFontSize(size);
+    doc.text(lines, options.x || margin, y);
+    y += lines.length * lineHeight + (options.after ?? 8);
+  };
+
+  const writeChipRow = (items) => {
+    if (!items.length) {
+      return;
+    }
+
+    addPageIfNeeded(42);
+    let x = margin;
+    const chipY = y;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    items.slice(0, 6).forEach((item) => {
+      const width = Math.min(152, doc.getTextWidth(item) + 22);
+      if (x + width > pageWidth - margin) {
+        y += 28;
+        x = margin;
+      }
+
+      setPdfFill(doc, "#eef8f3");
+      setPdfDraw(doc, "#b7dfcd");
+      doc.roundedRect(x, y, width, 22, 11, 11, "FD");
+      setPdfText(doc, "#0f766e");
+      doc.text(doc.splitTextToSize(item, width - 18)[0], x + 11, y + 14);
+      x += width + 8;
+    });
+    y = Math.max(y, chipY) + 36;
+  };
+
+  paintBackground();
+
+  setPdfFill(doc, "#eaf7f0");
+  setPdfDraw(doc, "#b7dfcd");
+  doc.roundedRect(margin, y, contentWidth, 114, 12, 12, "FD");
+
+  try {
+    const logo = await imageSrcToDataUrl("/logo-confere-agora.png");
+    doc.addImage(logo, "PNG", margin + 18, y + 22, 46, 46);
+  } catch {
+    setPdfFill(doc, "#0f766e");
+    doc.roundedRect(margin + 18, y + 22, 46, 46, 10, 10, "F");
+  }
+
+  setPdfText(doc, "#0f766e");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("Confere Agora", margin + 78, y + 36);
+  setPdfText(doc, "#0f172a");
+  doc.setFontSize(22);
+  doc.text("Laudo de checagem", margin + 78, y + 62);
+  setPdfText(doc, "#475569");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.text(`Gerado em ${generatedAtLabel}`, margin + 78, y + 84);
+
+  setPdfFill(doc, riskPalette.soft);
+  setPdfDraw(doc, riskPalette.border);
+  doc.roundedRect(pageWidth - margin - 134, y + 22, 116, 70, 10, 10, "FD");
+  setPdfText(doc, riskPalette.strong);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text(riskLabel, pageWidth - margin - 76, y + 50, { align: "center" });
+  doc.setFontSize(10);
+  doc.text(`${result.risk.score}/100`, pageWidth - margin - 76, y + 70, { align: "center" });
+
+  y += 144;
+
+  setPdfFill(doc, "#e2e8f0");
+  doc.roundedRect(margin, y, contentWidth, 10, 5, 5, "F");
+  setPdfFill(doc, riskPalette.strong);
+  doc.roundedRect(margin, y, Math.max(12, contentWidth * (result.risk.score / 100)), 10, 5, 5, "F");
+  y += 34;
+
+  writeTitle("Motivo principal");
+  writeBody(result.mainReason || result.summary, { size: 14, lineHeight: 19, color: "#0f172a", font: "bold" });
+
+  writeTitle("Resumo");
+  writeBody(result.summary, { size: 11, lineHeight: 17 });
+
+  writeChipRow([...categories, ...badges]);
+
+  writeTitle("Sinais encontrados");
+  if (signals.length) {
+    signals.forEach((signal) => {
+      const signalPalette = getRiskPalette(signal.severity);
+      const detailLines = doc.splitTextToSize(signal.detail, contentWidth - 28).slice(0, 2);
+      const cardHeight = 44 + detailLines.length * 12;
+      addPageIfNeeded(cardHeight + 14);
+      setPdfFill(doc, "#f8fafc");
+      setPdfDraw(doc, "#e2e8f0");
+      doc.roundedRect(margin, y, contentWidth, cardHeight, 9, 9, "FD");
+      setPdfText(doc, "#0f172a");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text(signal.title, margin + 14, y + 20);
+      setPdfText(doc, signalPalette.strong);
+      doc.setFontSize(9);
+      doc.text(riskStyles[signal.severity]?.label || signal.severity, pageWidth - margin - 12, y + 20, {
+        align: "right",
+      });
+      setPdfText(doc, "#475569");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.text(detailLines, margin + 14, y + 40);
+      y += cardHeight + 14;
+    });
+  } else {
+    writeBody("Nenhum sinal principal foi retornado para este laudo.");
+  }
+
+  addPageIfNeeded(34 + steps.length * 18);
+  writeTitle("Próximos passos");
+  steps.forEach((step, index) => {
+    writeBody(`${index + 1}. ${step}`, { size: 10.5, lineHeight: 15, after: 2 });
+  });
+
+  writeTitle("Conteúdo analisado");
+  writeBody(`${getModeLabel(mode)} - ${truncateText(input || result.summary, 360)}`, { size: 10.5, lineHeight: 16 });
+
+  writeTitle("Aviso de limite da análise");
+  writeBody(REPORT_LIMIT_NOTICE, { size: 9.5, lineHeight: 14, color: "#64748b" });
+
+  const totalPages = doc.getNumberOfPages();
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page);
+    setPdfText(doc, "#94a3b8");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text("confere-agora.vercel.app", margin, pageHeight - 38);
+    doc.text(`${page}/${totalPages}`, pageWidth - margin, pageHeight - 38, { align: "right" });
+  }
+
+  return new Blob([doc.output("arraybuffer")], { type: "application/pdf" });
 }
 
 function createReportImageBlob({ result, mode, input }) {
@@ -1260,17 +1509,22 @@ function ModeCards({ activeMode, onChange }) {
 
         return (
           <button
-            className={`group flex min-h-28 flex-col justify-between rounded-lg border p-4 text-left transition ${
+            className={`group relative flex min-h-32 flex-col justify-between overflow-hidden rounded-lg border p-4 text-left transition ${
               isActive
-                ? "border-teal-500 bg-teal-50 text-teal-950 shadow-soft"
+                ? "border-teal-500 bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-950 shadow-soft"
                 : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:bg-[#f8fbfa]"
             }`}
             key={option.id}
             type="button"
             onClick={() => onChange(option.id)}
           >
+            <span
+              className={`absolute inset-x-0 top-0 h-1 ${
+                isActive ? "bg-teal-700" : "bg-slate-100 group-hover:bg-teal-200"
+              }`}
+            />
             <span className="flex items-center justify-between gap-3">
-              <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${isActive ? "bg-white text-teal-700" : "bg-slate-50 text-slate-600"}`}>
+              <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${isActive ? "bg-white text-teal-700 shadow-sm" : "bg-slate-50 text-slate-600"}`}>
                 <Icon size={21} />
               </span>
               {isActive ? (
@@ -1330,7 +1584,8 @@ function ResultMeter({ result }) {
         : "Seguir com cautela";
 
   return (
-    <section className={`rounded-lg border p-4 shadow-soft ${style.bg} ${style.border}`}>
+    <section className={`relative overflow-hidden rounded-lg border p-4 shadow-soft ${style.bg} ${style.border}`}>
+      <div className={`absolute inset-x-0 top-0 h-1 ${style.bar}`} />
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className={`flex h-11 w-11 items-center justify-center rounded-lg bg-white ${style.text}`}>
@@ -1584,7 +1839,17 @@ function HistoryPanel({ history, onRestore, onClear }) {
   );
 }
 
-function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare, onDownloadImage, onOpenVisualReport }) {
+function ReportCard({
+  result,
+  reportText,
+  feedback,
+  onCopy,
+  onDownload,
+  onDownloadPdf,
+  onShare,
+  onDownloadImage,
+  onOpenVisualReport,
+}) {
   const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
   const firstSteps = (result.verificationSteps || []).slice(0, 3);
 
@@ -1620,18 +1885,26 @@ function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare,
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
             type="button"
-            onClick={onDownloadImage}
-          >
-            <ImageDown size={16} />
-            Imagem
-          </button>
-          <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
-            type="button"
             onClick={onOpenVisualReport}
           >
             <Newspaper size={16} />
             Página
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white transition hover:bg-teal-800"
+            type="button"
+            onClick={onDownloadPdf}
+          >
+            <FileDown size={16} />
+            PDF
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={onDownloadImage}
+          >
+            <ImageDown size={16} />
+            Imagem
           </button>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
@@ -1639,7 +1912,7 @@ function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare,
             onClick={onDownload}
           >
             <Download size={16} />
-            Baixar
+            TXT
           </button>
         </div>
       </div>
@@ -1680,7 +1953,7 @@ function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare,
   );
 }
 
-function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImage }) {
+function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf, onDownloadImage }) {
   if (!item?.result) {
     return (
       <section className="grid flex-1 place-items-center py-10">
@@ -1744,6 +2017,14 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImag
             Copiar
           </button>
           <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white transition hover:bg-teal-800"
+            type="button"
+            onClick={() => onDownloadPdf(item)}
+          >
+            <FileDown size={16} />
+            PDF
+          </button>
+          <button
             className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
             type="button"
             onClick={() => window.print()}
@@ -1765,27 +2046,27 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImag
             onClick={() => onDownloadText(item.reportText)}
           >
             <Download size={16} />
-            Baixar
+            TXT
           </button>
         </div>
       </div>
 
       <article className="print-report overflow-hidden rounded-lg border border-teal-100 bg-white shadow-soft">
-        <div className="grid gap-4 border-b border-teal-100 bg-[#eef8f3] p-5 md:grid-cols-[1fr_auto] md:items-start">
-          <div>
+        <div className="relative grid gap-4 overflow-hidden border-b border-teal-100 bg-[#eef8f3] p-5 md:grid-cols-[1fr_auto] md:items-start">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-800 via-emerald-500 to-amber-400" />
+          <div className="relative">
             <div className="mb-4 flex items-center gap-3">
               <img alt="Confere Agora" className="h-11 w-11 rounded-lg bg-white object-contain p-1" src="/logo-confere-agora.png" />
               <div>
                 <p className="text-sm font-bold text-teal-800">Confere Agora</p>
-                <h3 className="text-2xl font-bold text-slate-950">Relatório de checagem</h3>
+                <h3 className="text-2xl font-bold text-slate-950">Laudo de checagem</h3>
               </div>
             </div>
             <p className="max-w-3xl text-sm leading-6 text-slate-700">
-              Este laudo aponta risco de circulação e sinais que merecem verificação. Ele não substitui fonte oficial,
-              agência de checagem ou apuração jornalística.
+              {REPORT_LIMIT_NOTICE}
             </p>
           </div>
-          <div className={`rounded-lg border ${style.border} ${style.bg} p-4 text-right`}>
+          <div className={`relative rounded-lg border ${style.border} ${style.bg} p-4 text-right`}>
             <p className="text-xs font-bold text-slate-500">Risco</p>
             <div className={`mt-1 flex items-center justify-end gap-2 text-2xl font-bold ${style.text}`}>
               <RiskIcon size={24} />
@@ -1797,7 +2078,7 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImag
 
         <div className="grid gap-4 p-5 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="grid gap-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-lg border border-l-4 border-slate-200 border-l-teal-600 bg-slate-50 p-4">
               <p className="text-xs font-bold text-slate-500">Motivo principal</p>
               <p className="mt-2 text-lg font-bold leading-7 text-slate-950">{result.mainReason || result.summary}</p>
             </div>
@@ -1841,6 +2122,14 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImag
               <p className="mt-2 text-sm font-bold text-slate-900">{getModeLabel(item.mode)}</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">{truncateText(item.input || result.summary, 260)}</p>
               <p className="mt-3 text-xs font-bold text-slate-500">Gerado em {createdAt}</p>
+            </div>
+
+            <div className="rounded-lg border border-teal-100 bg-[#f2fbf8] p-4">
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
+                <Info size={18} />
+                Limite da análise
+              </h4>
+              <p className="text-sm leading-6 text-slate-700">{REPORT_LIMIT_NOTICE}</p>
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -1897,7 +2186,7 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImag
                       rel="noreferrer"
                       target="_blank"
                     >
-                      {reference.title}
+                      {reference.label}
                     </a>
                   ))}
                 </div>
@@ -2318,13 +2607,32 @@ function App() {
     }
 
     const blob = new Blob([textToDownload], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "confere-agora-relatorio.txt";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, "confere-agora-relatorio.txt");
     setReportFeedback("Relatório baixado.");
+  }
+
+  async function handleDownloadReportPdf(sourceItem) {
+    const reportItem = sourceItem?.result ? sourceItem : null;
+    const result = reportItem?.result || analysisState.final;
+
+    if (!result) {
+      return;
+    }
+
+    try {
+      setReportFeedback("Gerando PDF do laudo...");
+      const blob = await createReportPdfBlob({
+        result,
+        mode: reportItem?.mode || mode,
+        input: reportItem?.input || reportInput,
+        createdAt: reportItem?.createdAt,
+      });
+
+      downloadBlob(blob, "confere-agora-laudo.pdf");
+      setReportFeedback("PDF do laudo baixado.");
+    } catch {
+      setReportFeedback("Não foi possível gerar o PDF agora.");
+    }
   }
 
   async function handleShareReport() {
@@ -2372,12 +2680,7 @@ function App() {
       return;
     }
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "confere-agora-laudo.png";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, "confere-agora-laudo.png");
     setReportFeedback("Imagem do laudo baixada.");
   }
 
@@ -2429,12 +2732,12 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f2f7f4] text-slate-900">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <header className="rounded-lg border border-teal-100 bg-[#fbfdfc] px-4 py-4 shadow-soft sm:px-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <main className="app-shell min-h-screen text-slate-900">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <header className="site-header relative overflow-hidden rounded-lg border border-teal-100 bg-white/95 px-4 py-4 shadow-soft sm:px-5">
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-teal-100 bg-white shadow-soft">
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-teal-100 bg-gradient-to-br from-white to-emerald-50 shadow-soft">
                 <img
                   alt="Confere Agora"
                   className="h-11 w-11 object-contain"
@@ -2442,8 +2745,7 @@ function App() {
                 />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-950">Confere Agora</h1>
-                <p className="text-sm font-medium text-slate-600">Leia com calma. Confira sinais. Compartilhe melhor.</p>
+                <h1 className="text-3xl font-bold text-slate-950">Confere Agora</h1>
               </div>
             </div>
 
@@ -2459,9 +2761,9 @@ function App() {
               </span>
             </div>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          <div className="relative z-10 mt-4 grid gap-2 sm:grid-cols-4">
             {workflowItems.map(([step, label]) => (
-              <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-white px-3 py-2" key={step}>
+              <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-white/85 px-3 py-2 shadow-sm" key={step}>
                 <span className="text-xs font-bold text-teal-700">{step}</span>
                 <span className="text-sm font-bold text-slate-700">{label}</span>
               </div>
@@ -2475,6 +2777,7 @@ function App() {
             onBack={() => setActiveView("check")}
             onCopy={handleCopyReport}
             onDownloadText={handleDownloadReport}
+            onDownloadPdf={handleDownloadReportPdf}
             onDownloadImage={handleDownloadReportImage}
           />
         ) : activeView === "how" ? (
@@ -2483,7 +2786,7 @@ function App() {
           <ProjectPage />
         ) : (
         <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.7fr)]">
-          <div className="rounded-lg border border-teal-100 bg-white p-4 shadow-soft sm:p-5">
+          <div className="rounded-lg border border-teal-100 bg-white/95 p-4 shadow-soft sm:p-5">
             <div className="mb-5 flex flex-col gap-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -2794,6 +3097,7 @@ function App() {
                   feedback={reportFeedback}
                   onCopy={handleCopyReport}
                   onDownload={handleDownloadReport}
+                  onDownloadPdf={handleDownloadReportPdf}
                   onShare={handleShareReport}
                   onDownloadImage={handleDownloadReportImage}
                   onOpenVisualReport={handleOpenVisualReport}

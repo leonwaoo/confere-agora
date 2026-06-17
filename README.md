@@ -20,7 +20,7 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - OCR pela verificação complementar para identificar texto visível em imagens.
 - Classificação por categorias: saúde, política, golpe financeiro, corrente emocional, notícia sem fonte, acusação grave, link suspeito e imagem fora de contexto.
 - Laudo curto com risco, motivo principal, sinais encontrados e próximos passos.
-- Botão para copiar ou baixar relatório em `.txt`.
+- Botão para copiar o relatório ou baixar o laudo em `.pdf`, `.txt` e imagem.
 - Compartilhamento do laudo e download de imagem do resultado.
 - Página visual de relatório pronta para print e compartilhamento.
 - Endpoint para bot do Telegram com texto, link e imagem.
