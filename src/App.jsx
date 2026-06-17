@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   BookOpen,
   BrainCircuit,
   Camera,
@@ -19,6 +20,7 @@ import {
   ListChecks,
   Loader2,
   Newspaper,
+  Printer,
   RotateCcw,
   SearchCheck,
   Share2,
@@ -38,6 +40,7 @@ import {
 
 const MIN_TEXT_LENGTH = 18;
 const HISTORY_STORAGE_KEY = "confere-agora:history:v1";
+const REPORT_STORAGE_KEY = "confere-agora:current-report:v1";
 const MAX_HISTORY_ITEMS = 8;
 
 const sampleText =
@@ -1018,6 +1021,27 @@ function saveHistoryItems(items) {
   }
 }
 
+function loadCurrentReportItem() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REPORT_STORAGE_KEY) || "null");
+    return parsed?.result ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCurrentReportItem(item) {
+  try {
+    if (item) {
+      localStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(item));
+    } else {
+      localStorage.removeItem(REPORT_STORAGE_KEY);
+    }
+  } catch {
+    // O laudo visual e uma conveniencia local; falhas de armazenamento nao travam a checagem.
+  }
+}
+
 function createHistoryItem({ result, localResult, aiResult, mode, input, reportText }) {
   return {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -1560,7 +1584,7 @@ function HistoryPanel({ history, onRestore, onClear }) {
   );
 }
 
-function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare, onDownloadImage }) {
+function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare, onDownloadImage, onOpenVisualReport }) {
   const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
   const firstSteps = (result.verificationSteps || []).slice(0, 3);
 
@@ -1600,6 +1624,14 @@ function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare,
           >
             <ImageDown size={16} />
             Imagem
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={onOpenVisualReport}
+          >
+            <Newspaper size={16} />
+            Página
           </button>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
@@ -1648,6 +1680,236 @@ function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare,
   );
 }
 
+function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadImage }) {
+  if (!item?.result) {
+    return (
+      <section className="grid flex-1 place-items-center py-10">
+        <div className="max-w-2xl rounded-lg border border-teal-100 bg-white p-6 text-center shadow-soft">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+            <Newspaper size={28} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-950">Nenhum relatório gerado ainda</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Faça uma checagem de texto, link ou foto para criar uma página visual pronta para copiar, imprimir e compartilhar.
+          </p>
+          <button
+            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-800"
+            type="button"
+            onClick={onBack}
+          >
+            <ArrowLeft size={17} />
+            Fazer checagem
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const { result } = item;
+  const style = riskStyles[result.risk.level] || riskStyles.medio;
+  const RiskIcon = style.icon;
+  const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
+  const badges = buildEvidenceBadges(result);
+  const references = getReferenceLinksForCategories(result.categories).slice(0, 3);
+  const news = result.isNewsLike ? newsStatusContent[result.isNewsLike.status] : null;
+  const signals = (result.signals || []).slice(0, 3);
+  const steps = (result.verificationSteps || []).slice(0, 3);
+  const createdAt = item.createdAt ? new Date(item.createdAt).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR");
+
+  return (
+    <section className="grid gap-4 py-4">
+      <div className="no-print flex flex-col gap-3 rounded-lg border border-teal-100 bg-white p-4 shadow-soft md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-700">Página de relatório</p>
+          <h2 className="mt-1 text-2xl font-bold text-slate-950">Laudo visual para compartilhar</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Uma versão mais limpa do resultado, pronta para print, apresentação ou envio.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={onBack}
+          >
+            <ArrowLeft size={16} />
+            Voltar
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={() => onCopy(item.reportText)}
+          >
+            <Copy size={16} />
+            Copiar
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={() => window.print()}
+          >
+            <Printer size={16} />
+            Imprimir
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={() => onDownloadImage(item)}
+          >
+            <ImageDown size={16} />
+            Imagem
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
+            type="button"
+            onClick={() => onDownloadText(item.reportText)}
+          >
+            <Download size={16} />
+            Baixar
+          </button>
+        </div>
+      </div>
+
+      <article className="print-report overflow-hidden rounded-lg border border-teal-100 bg-white shadow-soft">
+        <div className="grid gap-4 border-b border-teal-100 bg-[#eef8f3] p-5 md:grid-cols-[1fr_auto] md:items-start">
+          <div>
+            <div className="mb-4 flex items-center gap-3">
+              <img alt="Confere Agora" className="h-11 w-11 rounded-lg bg-white object-contain p-1" src="/logo-confere-agora.png" />
+              <div>
+                <p className="text-sm font-bold text-teal-800">Confere Agora</p>
+                <h3 className="text-2xl font-bold text-slate-950">Relatório de checagem</h3>
+              </div>
+            </div>
+            <p className="max-w-3xl text-sm leading-6 text-slate-700">
+              Este laudo aponta risco de circulação e sinais que merecem verificação. Ele não substitui fonte oficial,
+              agência de checagem ou apuração jornalística.
+            </p>
+          </div>
+          <div className={`rounded-lg border ${style.border} ${style.bg} p-4 text-right`}>
+            <p className="text-xs font-bold text-slate-500">Risco</p>
+            <div className={`mt-1 flex items-center justify-end gap-2 text-2xl font-bold ${style.text}`}>
+              <RiskIcon size={24} />
+              {style.label}
+            </div>
+            <p className="mt-1 text-sm font-bold text-slate-800">{result.risk.score}/100</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-5 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="grid gap-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-bold text-slate-500">Motivo principal</p>
+              <p className="mt-2 text-lg font-bold leading-7 text-slate-950">{result.mainReason || result.summary}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h4 className="flex items-center gap-2 text-sm font-bold text-slate-950">
+                  <ShieldAlert size={18} />
+                  Nível de risco
+                </h4>
+                <span className={`text-sm font-bold ${style.text}`}>{result.risk.score}%</span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                <div className={`risk-meter-fill h-full rounded-full ${style.bar}`} style={{ width: `${result.risk.score}%` }} />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-700">{result.summary}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+                <ListChecks size={18} />
+                Sinais encontrados
+              </h4>
+              <div className="grid gap-3">
+                {signals.map((signal) => (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={signal.id || signal.title}>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-950">{signal.title}</p>
+                      <RiskPill level={signal.severity} />
+                    </div>
+                    <p className="text-sm leading-6 text-slate-600">{signal.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-4">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-xs font-bold text-slate-500">Conteúdo analisado</p>
+              <p className="mt-2 text-sm font-bold text-slate-900">{getModeLabel(item.mode)}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{truncateText(item.input || result.summary, 260)}</p>
+              <p className="mt-3 text-xs font-bold text-slate-500">Gerado em {createdAt}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+                <Target size={18} />
+                Próximos passos
+              </h4>
+              <ul className="space-y-2">
+                {steps.map((step) => (
+                  <li className="flex gap-2 text-sm leading-6 text-slate-700" key={step}>
+                    <CheckCircle2 className="mt-1 shrink-0 text-teal-700" size={16} />
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+                <Info size={18} />
+                Classificação
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {news ? (
+                  <span className={`rounded-full border px-3 py-1 text-xs font-bold ${news.className}`}>
+                    {news.label}
+                  </span>
+                ) : null}
+                {categories.map((category) => (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700" key={category}>
+                    {category}
+                  </span>
+                ))}
+                {badges.map((badge) => (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800" key={badge}>
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {references.length ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+                  <ExternalLink size={18} />
+                  Referências úteis
+                </h4>
+                <div className="grid gap-2">
+                  {references.map((reference) => (
+                    <a
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-teal-800 transition hover:border-teal-200 hover:bg-teal-50"
+                      href={reference.url}
+                      key={reference.url}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {reference.title}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 function SignalList({ title, icon: Icon, result }) {
   if (!result) {
     return null;
@@ -1681,6 +1943,7 @@ function SignalList({ title, icon: Icon, result }) {
 function TopNav({ activeView, onChange }) {
   const items = [
     ["check", "Checar"],
+    ["report", "Relatório"],
     ["how", "Como funciona"],
     ["project", "Projeto"],
   ];
@@ -1821,6 +2084,7 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [reportFeedback, setReportFeedback] = useState("");
   const [historyItems, setHistoryItems] = useState(() => loadHistoryItems());
+  const [currentReportItem, setCurrentReportItem] = useState(() => loadCurrentReportItem());
   const [activeView, setActiveView] = useState("check");
   const fileInputRef = useRef(null);
 
@@ -1882,7 +2146,9 @@ function App() {
     });
     const nextItems = [item, ...historyItems].slice(0, MAX_HISTORY_ITEMS);
     setHistoryItems(nextItems);
+    setCurrentReportItem(item);
     saveHistoryItems(nextItems);
+    saveCurrentReportItem(item);
   }
 
   function restoreHistoryItem(item) {
@@ -1900,12 +2166,16 @@ function App() {
       final: item.result,
       error: "",
     });
+    setCurrentReportItem(item);
+    saveCurrentReportItem(item);
     setReportFeedback("Análise restaurada do histórico.");
   }
 
   function clearHistory() {
     setHistoryItems([]);
+    setCurrentReportItem(null);
     saveHistoryItems([]);
+    saveCurrentReportItem(null);
   }
 
   useEffect(() => {
@@ -2025,25 +2295,29 @@ function App() {
     setReportFeedback("");
   }
 
-  async function handleCopyReport() {
-    if (!reportText) {
+  async function handleCopyReport(textOrEvent) {
+    const textToCopy = typeof textOrEvent === "string" ? textOrEvent : reportText;
+
+    if (!textToCopy) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(reportText);
+      await navigator.clipboard.writeText(textToCopy);
       setReportFeedback("Relatório copiado.");
     } catch {
       setReportFeedback("Não foi possível copiar agora.");
     }
   }
 
-  function handleDownloadReport() {
-    if (!reportText) {
+  function handleDownloadReport(textOrEvent) {
+    const textToDownload = typeof textOrEvent === "string" ? textOrEvent : reportText;
+
+    if (!textToDownload) {
       return;
     }
 
-    const blob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([textToDownload], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -2079,15 +2353,18 @@ function App() {
     }
   }
 
-  async function handleDownloadReportImage() {
-    if (!analysisState.final) {
+  async function handleDownloadReportImage(sourceItem) {
+    const reportItem = sourceItem?.result ? sourceItem : null;
+    const result = reportItem?.result || analysisState.final;
+
+    if (!result) {
       return;
     }
 
     const blob = await createReportImageBlob({
-      result: analysisState.final,
-      mode,
-      input: reportInput,
+      result,
+      mode: reportItem?.mode || mode,
+      input: reportItem?.input || reportInput,
     });
 
     if (!blob) {
@@ -2102,6 +2379,24 @@ function App() {
     link.click();
     URL.revokeObjectURL(url);
     setReportFeedback("Imagem do laudo baixada.");
+  }
+
+  function handleOpenVisualReport() {
+    if (!currentReportItem && analysisState.final) {
+      const item = createHistoryItem({
+        result: analysisState.final,
+        localResult: analysisState.local,
+        aiResult: analysisState.ai,
+        mode,
+        input: reportInput,
+        reportText,
+      });
+
+      setCurrentReportItem(item);
+      saveCurrentReportItem(item);
+    }
+
+    setActiveView("report");
   }
 
   async function handleFile(file) {
@@ -2174,7 +2469,15 @@ function App() {
           </div>
         </header>
 
-        {activeView === "how" ? (
+        {activeView === "report" ? (
+          <VisualReportPage
+            item={currentReportItem}
+            onBack={() => setActiveView("check")}
+            onCopy={handleCopyReport}
+            onDownloadText={handleDownloadReport}
+            onDownloadImage={handleDownloadReportImage}
+          />
+        ) : activeView === "how" ? (
           <HowItWorksPage />
         ) : activeView === "project" ? (
           <ProjectPage />
@@ -2493,6 +2796,7 @@ function App() {
                   onDownload={handleDownloadReport}
                   onShare={handleShareReport}
                   onDownloadImage={handleDownloadReportImage}
+                  onOpenVisualReport={handleOpenVisualReport}
                 />
                 <EvidenceBadges result={analysisState.final} />
                 <NewsAssessmentCard assessment={analysisState.final.isNewsLike} />
@@ -2564,14 +2868,11 @@ function App() {
               <section className="rounded-lg border border-slate-200 bg-white p-4">
                 <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
                   <BrainCircuit size={18} />
-                  Configurar verificação complementar
+                  Verificação complementar indisponível
                 </h3>
-                <div className="space-y-2 text-sm leading-6 text-slate-700">
-                  <p>Adicione a variável secreta no ambiente do deploy para liberar a verificação para todos.</p>
-                  <code className="block rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
-                    CLOUD_AI_API_KEY=sua_chave
-                  </code>
-                </div>
+                <p className="text-sm leading-6 text-slate-700">
+                  A checagem por regras continua ativa. Tente a verificação completa novamente em instantes.
+                </p>
               </section>
             ) : null}
 

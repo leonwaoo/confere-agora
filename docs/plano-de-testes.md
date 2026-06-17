@@ -23,7 +23,24 @@
 ```bash
 pnpm build
 pnpm test
+pnpm test:e2e
 ```
+
+Na primeira execução do Playwright, talvez seja necessário baixar o navegador:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+## Testes End-to-End
+
+Os testes Playwright cobrem:
+
+- Analise de texto.
+- Analise de link.
+- Upload de foto.
+- Ações de relatório.
+- Layout mobile sem rolagem horizontal.
 
 ## Validação de Produção
 

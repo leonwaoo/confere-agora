@@ -54,3 +54,19 @@ textarea {
     transition: none;
   }
 }
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .no-print,
+  header {
+    display: none !important;
+  }
+
+  .print-report {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}

@@ -2,6 +2,7 @@ node_modules/
 dist/
 .codex/
 .vite/
+test-results/
 *.log
 
 .vercel

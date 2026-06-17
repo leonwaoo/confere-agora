@@ -22,11 +22,14 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - Laudo curto com risco, motivo principal, sinais encontrados e próximos passos.
 - Botão para copiar ou baixar relatório em `.txt`.
 - Compartilhamento do laudo e download de imagem do resultado.
+- Página visual de relatório pronta para print e compartilhamento.
+- Endpoint para bot do Telegram com texto, link e imagem.
 - Histórico local das últimas análises no navegador.
 - Referências úteis por categoria de risco.
 - Medidor de confiabilidade da fonte para links.
 - Página interna com explicação do funcionamento, privacidade e arquitetura do projeto.
 - Testes automatizados para helpers de produto.
+- Testes end-to-end com Playwright para fluxo principal.
 - Limite anti-abuso leve na função de análise.
 - Fallback por regras locais caso a verificação complementar esteja indisponível.
 
@@ -82,6 +85,7 @@ Testes:
 
 ```bash
 pnpm test
+pnpm test:e2e
 ```
 
 ## Deploy
@@ -98,6 +102,7 @@ Guia: [Deploy e verificação na nuvem](docs/deploy-e-ia-na-nuvem.md)
 - [Roadmap](docs/roadmap.md)
 - [Decisões](docs/decisoes.md)
 - [Plano de testes](docs/plano-de-testes.md)
+- [Bot para Telegram e WhatsApp](docs/bot-telegram-whatsapp.md)
 - [Post para LinkedIn](docs/post-linkedin.md)
 
 ## Princípios

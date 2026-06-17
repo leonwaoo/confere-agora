@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Confere Agora</title>
+  <desc id="desc">Imagem social do Confere Agora, ferramenta de checagem de risco antes de compartilhar.</desc>
+  <rect width="1200" height="630" fill="#eef8f3"/>
+  <rect x="64" y="64" width="1072" height="502" rx="28" fill="#ffffff" stroke="#b9e3d5" stroke-width="2"/>
+  <circle cx="176" cy="174" r="54" fill="#0f766e"/>
+  <path d="M161 174.5l11.5 11.5 27-31" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="176" cy="174" r="30" fill="none" stroke="#ffffff" stroke-width="8" opacity=".45"/>
+  <text x="256" y="162" fill="#0f172a" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="800">Confere Agora</text>
+  <text x="258" y="211" fill="#0f766e" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">Checagem de risco antes de compartilhar</text>
+  <rect x="256" y="282" width="220" height="76" rx="16" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text x="292" y="330" fill="#115e59" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">Texto</text>
+  <rect x="500" y="282" width="220" height="76" rx="16" fill="#f7fee7" stroke="#bef264"/>
+  <text x="544" y="330" fill="#3f6212" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">Link</text>
+  <rect x="744" y="282" width="220" height="76" rx="16" fill="#ecfdf5" stroke="#86efac"/>
+  <text x="790" y="330" fill="#166534" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">Foto</text>
+  <rect x="256" y="414" width="688" height="18" rx="9" fill="#e2e8f0"/>
+  <rect x="256" y="414" width="468" height="18" rx="9" fill="#0f766e"/>
+  <text x="256" y="484" fill="#334155" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="700">Risco, sinais encontrados e próximos passos em um laudo curto.</text>
+</svg>
