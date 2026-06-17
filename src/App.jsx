@@ -261,10 +261,9 @@ const modeOptions = [
 ];
 
 const workflowItems = [
-  ["01", "Entrada"],
-  ["02", "Sinais"],
-  ["03", "Risco"],
-  ["04", "Checagens"],
+  ["01", "Enviar"],
+  ["02", "Analisar"],
+  ["03", "Conferir"],
 ];
 
 function normalizeText(value) {
@@ -1509,26 +1508,21 @@ function ModeCards({ activeMode, onChange }) {
 
         return (
           <button
-            className={`group relative flex min-h-32 flex-col justify-between overflow-hidden rounded-lg border p-4 text-left transition ${
+            className={`group relative flex min-h-28 flex-col justify-between overflow-hidden rounded-lg border p-4 text-left transition ${
               isActive
-                ? "border-teal-500 bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-950 shadow-soft"
-                : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:bg-[#f8fbfa]"
+                ? "border-teal-500 bg-white text-teal-950 shadow-soft ring-4 ring-teal-50"
+                : "border-slate-200 bg-white/90 text-slate-700 hover:border-teal-200 hover:bg-white hover:shadow-sm"
             }`}
             key={option.id}
             type="button"
             onClick={() => onChange(option.id)}
           >
-            <span
-              className={`absolute inset-x-0 top-0 h-1 ${
-                isActive ? "bg-teal-700" : "bg-slate-100 group-hover:bg-teal-200"
-              }`}
-            />
             <span className="flex items-center justify-between gap-3">
-              <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${isActive ? "bg-white text-teal-700 shadow-sm" : "bg-slate-50 text-slate-600"}`}>
+              <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${isActive ? "bg-teal-700 text-white shadow-sm" : "bg-slate-50 text-slate-600 group-hover:bg-teal-50 group-hover:text-teal-700"}`}>
                 <Icon size={21} />
               </span>
               {isActive ? (
-                <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-teal-700">Selecionado</span>
+                <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-bold text-teal-700">Atual</span>
               ) : null}
             </span>
             <span>
@@ -2234,17 +2228,16 @@ function TopNav({ activeView, onChange }) {
     ["check", "Checar"],
     ["report", "Relatório"],
     ["how", "Como funciona"],
-    ["project", "Projeto"],
   ];
 
   return (
-    <nav className="flex flex-wrap gap-2">
+    <nav className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
       {items.map(([id, label]) => (
         <button
-          className={`min-h-9 rounded-full border px-3 text-xs font-bold transition ${
+          className={`min-h-9 rounded-md px-3 text-xs font-bold transition ${
             activeView === id
-              ? "border-teal-600 bg-teal-700 text-white"
-              : "border-teal-100 bg-white text-slate-700 hover:border-teal-200 hover:bg-teal-50"
+              ? "bg-teal-700 text-white shadow-sm"
+              : "text-slate-600 hover:bg-white hover:text-slate-950"
           }`}
           key={id}
           type="button"
@@ -2311,48 +2304,6 @@ function HowItWorksPage() {
               </div>
             ))}
           </div>
-        </section>
-      </div>
-    </section>
-  );
-}
-
-function ProjectPage() {
-  return (
-    <section className="grid gap-4 py-4 lg:grid-cols-[0.85fr_1fr]">
-      <div className="rounded-lg border border-teal-100 bg-white p-5 shadow-soft">
-        <h2 className="text-2xl font-bold text-slate-950">Projeto de portfólio</h2>
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          O Confere Agora demonstra produto, frontend, integração com IA, funções serverless, segurança básica e documentação viva em um caso real de utilidade pública.
-        </p>
-        <div className="mt-5 grid gap-3">
-          {["React e Vite", "Tailwind CSS", "Vercel Functions", "Verificação em nuvem", "Fallback por regras locais", "Documentação para LinkedIn"].map((item) => (
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700" key={item}>
-              <CheckCircle2 className="text-teal-700" size={16} />
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-4">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <h3 className="mb-3 text-base font-bold text-slate-950">Arquitetura</h3>
-          <div className="grid gap-3 text-sm leading-6 text-slate-700">
-            <p><strong className="text-slate-950">Frontend:</strong> experiência de análise, histórico local, relatório e interface responsiva.</p>
-            <p><strong className="text-slate-950">Backend:</strong> funções serverless para proteger segredos, ler links com segurança e chamar a verificação complementar.</p>
-            <p><strong className="text-slate-950">Documentação:</strong> README, arquitetura, decisões, plano de testes e post para LinkedIn.</p>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <h3 className="mb-3 text-base font-bold text-slate-950">Próximos passos técnicos</h3>
-          <ul className="space-y-2 text-sm leading-6 text-slate-700">
-            <li>Adicionar testes end-to-end com navegador.</li>
-            <li>Medir uso da API complementar.</li>
-            <li>Criar página de relatório compartilhável com armazenamento controlado.</li>
-            <li>Adicionar domínio próprio e analytics de privacidade.</li>
-          </ul>
         </section>
       </div>
     </section>
@@ -2733,11 +2684,11 @@ function App() {
 
   return (
     <main className="app-shell min-h-screen text-slate-900">
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <header className="site-header relative overflow-hidden rounded-lg border border-teal-100 bg-white/95 px-4 py-4 shadow-soft sm:px-5">
-          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <header className="rounded-lg border border-white/80 bg-white px-4 py-4 shadow-soft sm:px-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-teal-100 bg-gradient-to-br from-white to-emerald-50 shadow-soft">
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-teal-100 bg-teal-50 shadow-sm">
                 <img
                   alt="Confere Agora"
                   className="h-11 w-11 object-contain"
@@ -2751,19 +2702,19 @@ function App() {
 
             <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
               <TopNav activeView={activeView} onChange={setActiveView} />
-              <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-teal-100 bg-white px-3 text-xs font-bold text-slate-700">
+              <span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-3 text-xs font-bold text-teal-900">
                 <StatusDot active={Boolean(aiStatus.ok)} />
                 {statusLabel}
               </span>
-              <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-teal-800">
+              <span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700">
                 <ShieldCheck size={14} />
                 Checagem protegida
               </span>
             </div>
           </div>
-          <div className="relative z-10 mt-4 grid gap-2 sm:grid-cols-4">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
             {workflowItems.map(([step, label]) => (
-              <div className="flex items-center gap-3 rounded-lg border border-teal-100 bg-white/85 px-3 py-2 shadow-sm" key={step}>
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" key={step}>
                 <span className="text-xs font-bold text-teal-700">{step}</span>
                 <span className="text-sm font-bold text-slate-700">{label}</span>
               </div>
@@ -2782,11 +2733,9 @@ function App() {
           />
         ) : activeView === "how" ? (
           <HowItWorksPage />
-        ) : activeView === "project" ? (
-          <ProjectPage />
         ) : (
         <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.7fr)]">
-          <div className="rounded-lg border border-teal-100 bg-white/95 p-4 shadow-soft sm:p-5">
+          <div className="rounded-lg border border-white/80 bg-white p-4 shadow-soft sm:p-5">
             <div className="mb-5 flex flex-col gap-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
