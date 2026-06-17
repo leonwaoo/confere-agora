@@ -1,4 +1,4 @@
-import { analyzeWithGemini, readJsonBody, sendJson } from "./_gemini.js";
+import { analyzeWithGemini, extractLinkContent, readJsonBody, sendJson } from "./_gemini.js";
 
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -54,13 +54,18 @@ export default async function handler(request, response) {
     return;
   }
 
+  let payload = null;
+
   try {
-    const payload = await readJsonBody(request);
+    payload = await readJsonBody(request);
     const analysis = await analyzeWithGemini(payload);
     sendJson(response, 200, { ok: true, analysis });
   } catch (error) {
+    const linkMetadata = payload?.mode === "link" ? await extractLinkContent(payload.linkUrl) : null;
+
     sendJson(response, 200, {
       ok: false,
+      linkMetadata,
       error:
         error.name === "AbortError"
           ? "A verificação complementar demorou para responder."

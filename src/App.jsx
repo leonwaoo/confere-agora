@@ -1972,10 +1972,12 @@ function App() {
       const data = await response.json();
 
       if (!data.ok) {
+        const enrichedLocalResult =
+          data.linkMetadata && mode === "link" ? { ...localResult, linkMetadata: data.linkMetadata } : localResult;
         const fallbackState = {
-          local: localResult,
+          local: enrichedLocalResult,
           ai: null,
-          final: localResult,
+          final: enrichedLocalResult,
           error: data.error || "A verificação complementar não respondeu.",
         };
         setAnalysisState(fallbackState);
