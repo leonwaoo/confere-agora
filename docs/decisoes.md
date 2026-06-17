@@ -58,9 +58,9 @@ Motivo: o usuario precisa entender rapidamente por que deve ter cautela antes de
 
 ## 2026-06-16 - Relatorio copiavel
 
-Decisao: permitir copiar ou baixar o relatorio da verificacao em arquivo `.txt`.
+Decisao: permitir copiar o relatorio da verificacao.
 
-Motivo: o recurso torna o projeto mais util para estudo, compartilhamento responsavel e demonstracao em portfolio.
+Motivo: o recurso torna o projeto mais util para estudo, compartilhamento responsavel e demonstracao em portfolio, sem depender de download de arquivo simples.
 
 ## 2026-06-16 - Checagem de formato de noticia
 
@@ -103,6 +103,24 @@ Motivo: proteger a chave de verificacao em nuvem contra uso excessivo e preserva
 Decisao: adicionar testes com `node --test` para helpers de produto.
 
 Motivo: validar regras reutilizaveis sem adicionar dependencias pesadas ao MVP.
+
+## 2026-06-17 - Exportacao de relatorio
+
+Decisao: manter downloads de relatorio somente em PDF e imagem, removendo a opcao TXT da interface.
+
+Motivo: PDF e imagem sao formatos mais visuais, profissionais e adequados para portifolio, print e compartilhamento. O texto continua disponivel para copiar, mas nao aparece mais como arquivo baixavel.
+
+## 2026-06-17 - PDF em uma pagina
+
+Decisao: gerar o PDF do laudo em uma unica pagina A4, com blocos fixos para cabecalho, risco, sinais, resumo, proximos passos, conteudo analisado e aviso de limite.
+
+Motivo: o PDF anterior podia ficar colado ou cortar conteudo. A versao de uma pagina prioriza leitura rapida, espacamento consistente e compartilhamento sem paginas quebradas.
+
+## 2026-06-17 - Responsividade mobile
+
+Decisao: revisar cabecalho, navegacao, botoes de acao e grids para evitar rolagem horizontal e elementos aumentados no celular.
+
+Motivo: o site publico precisa funcionar bem em telas pequenas, especialmente porque o uso natural do produto acontece em celulares, ao receber links, prints e mensagens.
 
 ## Decisoes Pendentes
 

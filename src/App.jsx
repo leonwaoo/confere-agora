@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
-  Download,
   ExternalLink,
   FileDown,
   FileText,
@@ -737,7 +736,7 @@ function analyzePhoto(file, imageMeta, description) {
         "medio",
         "Texto da imagem não informado",
         "A verificação complementar pode ler a imagem quando estiver configurada; sem ela, a regra precisa de transcrição.",
-        "Transcreva manchete, legenda ou texto visível para melhorar a análise local.",
+        "Transcreva manchete, legenda ou texto visível para melhorar a leitura da imagem.",
       ),
     );
   }
@@ -1008,15 +1007,15 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
     "Confere Agora - Relatório de checagem",
     `Data: ${new Date().toLocaleString("pt-BR")}`,
     `Entrada: ${getModeLabel(mode)}`,
-    inputPreview ? `Conteúdo analisado: ${inputPreview}` : "",
+    inputPreview ? `Conteúdo analisado: ${inputPreview}` : null,
     "",
     `Risco: ${riskStyles[result.risk.level]?.label || result.risk.level} (${result.risk.score}/100)`,
     `Motivo principal: ${result.mainReason || result.summary}`,
     `Resumo: ${result.summary}`,
-    news ? `Formato de notícia: ${news.label} - ${result.isNewsLike.detail}` : "",
-    plausibility ? `Plausibilidade: ${plausibility.label} - ${result.plausibility.detail}` : "",
-    categories.length ? `Categorias: ${categories.join(", ")}` : "",
-    badges.length ? `Selos: ${badges.join(", ")}` : "",
+    news ? `Formato de notícia: ${news.label} - ${result.isNewsLike.detail}` : null,
+    plausibility ? `Plausibilidade: ${plausibility.label} - ${result.plausibility.detail}` : null,
+    categories.length ? `Categorias: ${categories.join(", ")}` : null,
+    badges.length ? `Selos: ${badges.join(", ")}` : null,
     "",
     "Sinais encontrados:",
     ...signals.map((signal) => `- ${signal.title}: ${signal.detail}`),
@@ -1027,7 +1026,7 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
     `Verificação confirmada: ${aiResult?.risk?.score ?? result.risk.score} / 100`,
     `Observação: ${REPORT_LIMIT_NOTICE}`,
   ]
-    .filter((line) => line !== "")
+    .filter((line) => line !== null && line !== undefined)
     .join("\n");
 }
 
@@ -1144,191 +1143,231 @@ async function createReportPdfBlob({ result, mode, input, createdAt }) {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 42;
+  const margin = 36;
   const contentWidth = pageWidth - margin * 2;
   const riskLabel = riskStyles[result.risk.level]?.label || result.risk.level;
   const riskPalette = getRiskPalette(result.risk.level);
   const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
   const badges = buildEvidenceBadges(result);
-  const signals = (result.signals || []).slice(0, 4);
-  const steps = (result.verificationSteps || []).slice(0, 4);
+  const news = result.isNewsLike ? newsStatusContent[result.isNewsLike.status] : null;
+  const plausibility = result.plausibility ? plausibilityContent[result.plausibility.status] : null;
+  const signals = (result.signals || []).slice(0, 3);
+  const steps = (result.verificationSteps || []).slice(0, 3);
   const generatedAt = createdAt ? new Date(createdAt) : new Date();
   const generatedAtLabel = Number.isNaN(generatedAt.getTime())
     ? new Date().toLocaleString("pt-BR")
     : generatedAt.toLocaleString("pt-BR");
-  let y = 48;
 
-  const paintBackground = () => {
-    setPdfFill(doc, "#f3faf6");
-    doc.rect(0, 0, pageWidth, pageHeight, "F");
-    setPdfFill(doc, "#ffffff");
-    doc.roundedRect(margin - 10, 28, contentWidth + 20, pageHeight - 56, 14, 14, "F");
-    setPdfDraw(doc, "#cfe9dc");
-    doc.roundedRect(margin - 10, 28, contentWidth + 20, pageHeight - 56, 14, 14, "S");
-  };
+  const fitLines = (value, width, maxLines) => {
+    const lines = doc.splitTextToSize(String(value || ""), width);
 
-  const addPageIfNeeded = (neededHeight) => {
-    if (y + neededHeight <= pageHeight - 84) {
-      return;
+    if (lines.length <= maxLines) {
+      return lines;
     }
 
-    doc.addPage();
-    paintBackground();
-    y = 54;
-  };
+    const fitted = lines.slice(0, maxLines);
+    let last = fitted[maxLines - 1] || "";
 
-  const writeTitle = (label) => {
-    addPageIfNeeded(42);
-    setPdfText(doc, "#0f172a");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(label, margin, y);
-    y += 18;
-  };
-
-  const writeBody = (text, options = {}) => {
-    const size = options.size || 10.5;
-    const lineHeight = options.lineHeight || 16;
-    const color = options.color || "#334155";
-    const font = options.font || "normal";
-    const lines = doc.splitTextToSize(String(text || ""), options.width || contentWidth);
-    addPageIfNeeded(lines.length * lineHeight + 8);
-    setPdfText(doc, color);
-    doc.setFont("helvetica", font);
-    doc.setFontSize(size);
-    doc.text(lines, options.x || margin, y);
-    y += lines.length * lineHeight + (options.after ?? 8);
-  };
-
-  const writeChipRow = (items) => {
-    if (!items.length) {
-      return;
+    while (last.length > 4 && doc.getTextWidth(`${last}...`) > width) {
+      last = last.slice(0, -1).trim();
     }
 
-    addPageIfNeeded(42);
-    let x = margin;
-    const chipY = y;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    items.slice(0, 6).forEach((item) => {
-      const width = Math.min(152, doc.getTextWidth(item) + 22);
-      if (x + width > pageWidth - margin) {
-        y += 28;
-        x = margin;
-      }
+    fitted[maxLines - 1] = `${last.replace(/[.,;:]$/, "")}...`;
+    return fitted;
+  };
 
-      setPdfFill(doc, "#eef8f3");
-      setPdfDraw(doc, "#b7dfcd");
-      doc.roundedRect(x, y, width, 22, 11, 11, "FD");
-      setPdfText(doc, "#0f766e");
-      doc.text(doc.splitTextToSize(item, width - 18)[0], x + 11, y + 14);
-      x += width + 8;
+  const writeText = (value, x, y, width, options = {}) => {
+    const lines = fitLines(value, width, options.maxLines || 2);
+    const lineHeight = options.lineHeight || 13;
+    setPdfText(doc, options.color || "#334155");
+    doc.setFont("helvetica", options.font || "normal");
+    doc.setFontSize(options.size || 9.5);
+    doc.text(lines, x, y);
+    return y + lines.length * lineHeight;
+  };
+
+  const drawCard = (x, y, width, height, title, options = {}) => {
+    setPdfFill(doc, options.fill || "#ffffff");
+    setPdfDraw(doc, options.border || "#dbe7e1");
+    doc.roundedRect(x, y, width, height, 10, 10, "FD");
+
+    if (title) {
+      setPdfText(doc, options.titleColor || "#0f172a");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text(title, x + 14, y + 22);
+    }
+  };
+
+  const writeBullet = (index, text, x, y, width) => {
+    setPdfFill(doc, "#eaf7f0");
+    doc.circle(x + 6, y - 3, 6, "F");
+    setPdfText(doc, "#0f766e");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text(String(index), x + 6, y - 0.5, { align: "center" });
+    return writeText(text, x + 18, y, width - 18, {
+      size: 9.2,
+      lineHeight: 12,
+      maxLines: 2,
+      color: "#475569",
     });
-    y = Math.max(y, chipY) + 36;
   };
 
-  paintBackground();
+  setPdfFill(doc, "#eef8f3");
+  doc.rect(0, 0, pageWidth, pageHeight, "F");
+  setPdfFill(doc, "#ffffff");
+  setPdfDraw(doc, "#cfe7dc");
+  doc.roundedRect(24, 24, pageWidth - 48, pageHeight - 48, 18, 18, "FD");
 
-  setPdfFill(doc, "#eaf7f0");
-  setPdfDraw(doc, "#b7dfcd");
-  doc.roundedRect(margin, y, contentWidth, 114, 12, 12, "FD");
+  const headerY = 42;
+  drawCard(margin, headerY, contentWidth, 92, "", { fill: "#eaf7f0", border: "#b7dfcd" });
 
   try {
     const logo = await imageSrcToDataUrl("/logo-confere-agora.png");
-    doc.addImage(logo, "PNG", margin + 18, y + 22, 46, 46);
+    doc.addImage(logo, "PNG", margin + 16, headerY + 18, 44, 44);
   } catch {
     setPdfFill(doc, "#0f766e");
-    doc.roundedRect(margin + 18, y + 22, 46, 46, 10, 10, "F");
+    doc.roundedRect(margin + 16, headerY + 18, 44, 44, 9, 9, "F");
   }
 
   setPdfText(doc, "#0f766e");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("Confere Agora", margin + 78, y + 36);
+  doc.setFontSize(11);
+  doc.text("Confere Agora", margin + 74, headerY + 30);
   setPdfText(doc, "#0f172a");
-  doc.setFontSize(22);
-  doc.text("Laudo de checagem", margin + 78, y + 62);
-  setPdfText(doc, "#475569");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-  doc.text(`Gerado em ${generatedAtLabel}`, margin + 78, y + 84);
-
-  setPdfFill(doc, riskPalette.soft);
-  setPdfDraw(doc, riskPalette.border);
-  doc.roundedRect(pageWidth - margin - 134, y + 22, 116, 70, 10, 10, "FD");
-  setPdfText(doc, riskPalette.strong);
-  doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text(riskLabel, pageWidth - margin - 76, y + 50, { align: "center" });
-  doc.setFontSize(10);
-  doc.text(`${result.risk.score}/100`, pageWidth - margin - 76, y + 70, { align: "center" });
-
-  y += 144;
-
-  setPdfFill(doc, "#e2e8f0");
-  doc.roundedRect(margin, y, contentWidth, 10, 5, 5, "F");
-  setPdfFill(doc, riskPalette.strong);
-  doc.roundedRect(margin, y, Math.max(12, contentWidth * (result.risk.score / 100)), 10, 5, 5, "F");
-  y += 34;
-
-  writeTitle("Motivo principal");
-  writeBody(result.mainReason || result.summary, { size: 14, lineHeight: 19, color: "#0f172a", font: "bold" });
-
-  writeTitle("Resumo");
-  writeBody(result.summary, { size: 11, lineHeight: 17 });
-
-  writeChipRow([...categories, ...badges]);
-
-  writeTitle("Sinais encontrados");
-  if (signals.length) {
-    signals.forEach((signal) => {
-      const signalPalette = getRiskPalette(signal.severity);
-      const detailLines = doc.splitTextToSize(signal.detail, contentWidth - 28).slice(0, 2);
-      const cardHeight = 44 + detailLines.length * 12;
-      addPageIfNeeded(cardHeight + 14);
-      setPdfFill(doc, "#f8fafc");
-      setPdfDraw(doc, "#e2e8f0");
-      doc.roundedRect(margin, y, contentWidth, cardHeight, 9, 9, "FD");
-      setPdfText(doc, "#0f172a");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      doc.text(signal.title, margin + 14, y + 20);
-      setPdfText(doc, signalPalette.strong);
-      doc.setFontSize(9);
-      doc.text(riskStyles[signal.severity]?.label || signal.severity, pageWidth - margin - 12, y + 20, {
-        align: "right",
-      });
-      setPdfText(doc, "#475569");
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.5);
-      doc.text(detailLines, margin + 14, y + 40);
-      y += cardHeight + 14;
-    });
-  } else {
-    writeBody("Nenhum sinal principal foi retornado para este laudo.");
-  }
-
-  addPageIfNeeded(34 + steps.length * 18);
-  writeTitle("Próximos passos");
-  steps.forEach((step, index) => {
-    writeBody(`${index + 1}. ${step}`, { size: 10.5, lineHeight: 15, after: 2 });
+  doc.text("Laudo de checagem", margin + 74, headerY + 54);
+  writeText(`Gerado em ${generatedAtLabel}`, margin + 74, headerY + 73, 280, {
+    size: 9,
+    lineHeight: 11,
+    maxLines: 1,
+    color: "#64748b",
   });
 
-  writeTitle("Conteúdo analisado");
-  writeBody(`${getModeLabel(mode)} - ${truncateText(input || result.summary, 360)}`, { size: 10.5, lineHeight: 16 });
+  const riskBoxWidth = 112;
+  const riskBoxX = pageWidth - margin - riskBoxWidth - 16;
+  setPdfFill(doc, riskPalette.soft);
+  setPdfDraw(doc, riskPalette.border);
+  doc.roundedRect(riskBoxX, headerY + 17, riskBoxWidth, 58, 10, 10, "FD");
+  setPdfText(doc, riskPalette.strong);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text(riskLabel, riskBoxX + riskBoxWidth / 2, headerY + 43, { align: "center" });
+  doc.setFontSize(9.5);
+  doc.text(`${result.risk.score}/100`, riskBoxX + riskBoxWidth / 2, headerY + 61, { align: "center" });
 
-  writeTitle("Aviso de limite da análise");
-  writeBody(REPORT_LIMIT_NOTICE, { size: 9.5, lineHeight: 14, color: "#64748b" });
+  const meterY = 154;
+  setPdfFill(doc, "#e2e8f0");
+  doc.roundedRect(margin, meterY, contentWidth, 9, 5, 5, "F");
+  setPdfFill(doc, riskPalette.strong);
+  doc.roundedRect(margin, meterY, Math.max(14, contentWidth * (result.risk.score / 100)), 9, 5, 5, "F");
 
-  const totalPages = doc.getNumberOfPages();
-  for (let page = 1; page <= totalPages; page += 1) {
-    doc.setPage(page);
-    setPdfText(doc, "#94a3b8");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text("confere-agora.vercel.app", margin, pageHeight - 38);
-    doc.text(`${page}/${totalPages}`, pageWidth - margin, pageHeight - 38, { align: "right" });
+  const mainY = 178;
+  drawCard(margin, mainY, contentWidth, 76, "Motivo principal", { fill: "#f8fafc", border: "#dbe7e1" });
+  writeText(result.mainReason || result.summary, margin + 14, mainY + 44, contentWidth - 28, {
+    size: 12.5,
+    lineHeight: 16,
+    maxLines: 2,
+    color: "#0f172a",
+    font: "bold",
+  });
+
+  const columnY = 274;
+  const gap = 14;
+  const columnWidth = (contentWidth - gap) / 2;
+  const leftX = margin;
+  const rightX = margin + columnWidth + gap;
+
+  drawCard(leftX, columnY, columnWidth, 236, "Sinais encontrados");
+  if (signals.length) {
+    signals.forEach((signal, index) => {
+      const itemY = columnY + 38 + index * 63;
+      const signalPalette = getRiskPalette(signal.severity);
+      setPdfFill(doc, "#f8fafc");
+      setPdfDraw(doc, "#e2e8f0");
+      doc.roundedRect(leftX + 12, itemY, columnWidth - 24, 54, 8, 8, "FD");
+      setPdfText(doc, "#0f172a");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.2);
+      doc.text(fitLines(signal.title, columnWidth - 94, 1), leftX + 24, itemY + 17);
+      setPdfText(doc, signalPalette.strong);
+      doc.setFontSize(8);
+      doc.text(riskStyles[signal.severity]?.label || signal.severity, leftX + columnWidth - 24, itemY + 17, {
+        align: "right",
+      });
+      writeText(signal.detail, leftX + 24, itemY + 34, columnWidth - 48, {
+        size: 8.5,
+        lineHeight: 10,
+        maxLines: 2,
+        color: "#64748b",
+      });
+    });
+  } else {
+    writeText("Nenhum sinal principal foi retornado para este laudo.", leftX + 14, columnY + 44, columnWidth - 28, {
+      maxLines: 3,
+    });
   }
+
+  drawCard(leftX, columnY + 252, columnWidth, 104, "Resumo");
+  writeText(result.summary, leftX + 14, columnY + 296, columnWidth - 28, {
+    size: 9.2,
+    lineHeight: 12.5,
+    maxLines: 4,
+    color: "#475569",
+  });
+
+  drawCard(leftX, columnY + 372, columnWidth, 88, "Limite da análise", { fill: "#f2fbf8", border: "#b7dfcd" });
+  writeText(REPORT_LIMIT_NOTICE, leftX + 14, columnY + 416, columnWidth - 28, {
+    size: 8.3,
+    lineHeight: 10.5,
+    maxLines: 4,
+    color: "#64748b",
+  });
+
+  drawCard(rightX, columnY, columnWidth, 120, "Classificação");
+  const classificationLines = [
+    news ? `Formato: ${news.label}` : null,
+    plausibility ? `Plausibilidade: ${plausibility.label}` : null,
+    categories.length ? `Categorias: ${categories.slice(0, 3).join(", ")}` : null,
+    badges.length ? `Selos: ${badges.slice(0, 3).join(", ")}` : null,
+  ].filter(Boolean);
+  writeText(classificationLines.join("\n"), rightX + 14, columnY + 44, columnWidth - 28, {
+    size: 9,
+    lineHeight: 13,
+    maxLines: 5,
+    color: "#475569",
+  });
+
+  drawCard(rightX, columnY + 136, columnWidth, 154, "Próximos passos");
+  if (steps.length) {
+    steps.forEach((step, index) => {
+      writeBullet(index + 1, step, rightX + 14, columnY + 180 + index * 35, columnWidth - 28);
+    });
+  } else {
+    writeText("Procure a fonte original antes de compartilhar.", rightX + 14, columnY + 180, columnWidth - 28);
+  }
+
+  drawCard(rightX, columnY + 306, columnWidth, 154, "Conteúdo analisado");
+  writeText(getModeLabel(mode), rightX + 14, columnY + 350, columnWidth - 28, {
+    size: 9.5,
+    lineHeight: 12,
+    maxLines: 1,
+    color: "#0f766e",
+    font: "bold",
+  });
+  writeText(truncateText(input || result.summary, 420), rightX + 14, columnY + 372, columnWidth - 28, {
+    size: 8.8,
+    lineHeight: 11.2,
+    maxLines: 6,
+    color: "#64748b",
+  });
+
+  setPdfText(doc, "#94a3b8");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.text("confere-agora.vercel.app", margin, pageHeight - 38);
+  doc.text("1/1", pageWidth - margin, pageHeight - 38, { align: "right" });
 
   return new Blob([doc.output("arraybuffer")], { type: "application/pdf" });
 }
@@ -1605,17 +1644,17 @@ function ResultMeter({ result }) {
   return (
     <section className={`relative overflow-hidden rounded-lg border p-4 shadow-soft ${style.bg} ${style.border}`}>
       <div className={`absolute inset-x-0 top-0 h-1 ${style.bar}`} />
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 items-center gap-3">
           <span className={`flex h-11 w-11 items-center justify-center rounded-lg bg-white ${style.text}`}>
             <Icon size={24} />
           </span>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-500">Resultado confirmado</p>
-            <h2 className={`text-2xl font-bold ${style.text}`}>Risco {style.label}</h2>
+            <h2 className={`text-xl font-bold sm:text-2xl ${style.text}`}>Risco {style.label}</h2>
           </div>
         </div>
-        <span className={`rounded-full bg-white px-3 py-1 text-sm font-bold ${style.text}`}>
+        <span className={`w-fit rounded-full bg-white px-3 py-1 text-sm font-bold ${style.text}`}>
           {result.risk.score}/100
         </span>
       </div>
@@ -1882,7 +1921,6 @@ function ReportCard({
   reportText,
   feedback,
   onCopy,
-  onDownload,
   onDownloadPdf,
   onShare,
   onDownloadImage,
@@ -1903,9 +1941,9 @@ function ReportCard({
             {result.mainReason || "O conteúdo precisa de checagem antes de ser compartilhado."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={onCopy}
           >
@@ -1913,7 +1951,7 @@ function ReportCard({
             Copiar
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={onShare}
           >
@@ -1921,7 +1959,7 @@ function ReportCard({
             Compartilhar
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={onOpenVisualReport}
           >
@@ -1929,7 +1967,7 @@ function ReportCard({
             Página
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white transition hover:bg-teal-800"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white transition hover:bg-teal-800 sm:w-auto"
             type="button"
             onClick={onDownloadPdf}
           >
@@ -1937,20 +1975,12 @@ function ReportCard({
             PDF
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={onDownloadImage}
           >
             <ImageDown size={16} />
             Imagem
-          </button>
-          <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            type="button"
-            onClick={onDownload}
-          >
-            <Download size={16} />
-            TXT
           </button>
         </div>
       </div>
@@ -1991,7 +2021,7 @@ function ReportCard({
   );
 }
 
-function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf, onDownloadImage }) {
+function VisualReportPage({ item, onBack, onCopy, onDownloadPdf, onDownloadImage }) {
   if (!item?.result) {
     return (
       <section className="grid flex-1 place-items-center py-10">
@@ -2004,7 +2034,7 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf,
             Faça uma checagem de texto, link ou foto para criar uma página visual pronta para copiar, imprimir e compartilhar.
           </p>
           <button
-            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-800"
+            className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-800 sm:w-auto"
             type="button"
             onClick={onBack}
           >
@@ -2037,9 +2067,9 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf,
             Uma versão mais limpa do resultado, pronta para print, apresentação ou envio.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={onBack}
           >
@@ -2047,7 +2077,7 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf,
             Voltar
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={() => onCopy(item.reportText)}
           >
@@ -2055,7 +2085,7 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf,
             Copiar
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white transition hover:bg-teal-800"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-700 px-3 text-sm font-bold text-white transition hover:bg-teal-800 sm:w-auto"
             type="button"
             onClick={() => onDownloadPdf(item)}
           >
@@ -2063,7 +2093,7 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf,
             PDF
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={() => window.print()}
           >
@@ -2071,20 +2101,12 @@ function VisualReportPage({ item, onBack, onCopy, onDownloadText, onDownloadPdf,
             Imprimir
           </button>
           <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 sm:w-auto"
             type="button"
             onClick={() => onDownloadImage(item)}
           >
             <ImageDown size={16} />
             Imagem
-          </button>
-          <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            type="button"
-            onClick={() => onDownloadText(item.reportText)}
-          >
-            <Download size={16} />
-            TXT
           </button>
         </div>
       </div>
@@ -2275,10 +2297,10 @@ function TopNav({ activeView, onChange }) {
   ];
 
   return (
-    <nav className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+    <nav className="grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:inline-flex sm:w-auto">
       {items.map(([id, label]) => (
         <button
-          className={`min-h-9 rounded-md px-3 text-xs font-bold transition ${
+          className={`min-h-9 rounded-md px-2 text-xs font-bold transition sm:px-3 ${
             activeView === id
               ? "bg-teal-700 text-white shadow-sm"
               : "text-slate-600 hover:bg-white hover:text-slate-950"
@@ -2590,18 +2612,6 @@ function App() {
     }
   }
 
-  function handleDownloadReport(textOrEvent) {
-    const textToDownload = typeof textOrEvent === "string" ? textOrEvent : reportText;
-
-    if (!textToDownload) {
-      return;
-    }
-
-    const blob = new Blob([textToDownload], { type: "text/plain;charset=utf-8" });
-    downloadBlob(blob, "confere-agora-relatorio.txt");
-    setReportFeedback("Relatório baixado.");
-  }
-
   async function handleDownloadReportPdf(sourceItem) {
     const reportItem = sourceItem?.result ? sourceItem : null;
     const result = reportItem?.result || analysisState.final;
@@ -2724,29 +2734,29 @@ function App() {
 
   return (
     <main className="app-shell min-h-screen text-slate-900">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <header className="rounded-lg border border-white/80 bg-white px-4 py-4 shadow-soft sm:px-5">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-3 py-4 sm:px-6 sm:py-5 lg:px-8">
+        <header className="rounded-lg border border-white/80 bg-white px-3 py-4 shadow-soft sm:px-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-teal-100 bg-teal-50 shadow-sm">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-teal-100 bg-teal-50 shadow-sm sm:h-14 sm:w-14">
                 <img
                   alt="Confere Agora"
-                  className="h-11 w-11 object-contain"
+                  className="h-10 w-10 object-contain sm:h-11 sm:w-11"
                   src="/logo-confere-agora.png"
                 />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-slate-950">Confere Agora</h1>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold text-slate-950 sm:text-3xl">Confere Agora</h1>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-start lg:justify-end">
               <TopNav activeView={activeView} onChange={setActiveView} />
-              <span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-3 text-xs font-bold text-teal-900">
+              <span className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-teal-100 bg-teal-50 px-3 text-xs font-bold text-teal-900">
                 <StatusDot active={Boolean(aiStatus.ok)} />
                 {statusLabel}
               </span>
-              <span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700">
+              <span className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700">
                 <ShieldCheck size={14} />
                 Checagem protegida
               </span>
@@ -2767,15 +2777,14 @@ function App() {
             item={currentReportItem}
             onBack={() => setActiveView("check")}
             onCopy={handleCopyReport}
-            onDownloadText={handleDownloadReport}
             onDownloadPdf={handleDownloadReportPdf}
             onDownloadImage={handleDownloadReportImage}
           />
         ) : activeView === "how" ? (
           <HowItWorksPage />
         ) : (
-        <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.7fr)]">
-          <div className="rounded-lg border border-white/80 bg-white p-4 shadow-soft sm:p-5">
+        <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
+          <div className="min-w-0 rounded-lg border border-white/80 bg-white p-4 shadow-soft sm:p-5">
             <div className="mb-5 flex flex-col gap-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -2810,9 +2819,9 @@ function App() {
                     setReportFeedback("");
                   }}
                 />
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                     type="button"
                     disabled={!canAnalyze || isAnalyzing}
                     onClick={handleAnalyze}
@@ -2821,7 +2830,7 @@ function App() {
                     {isAnalyzing ? "Analisando" : "Conferir agora"}
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={() => {
                       setText(claimSample);
@@ -2833,7 +2842,7 @@ function App() {
                     Boato de saúde
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={() => {
                       setText(sampleText);
@@ -2845,7 +2854,7 @@ function App() {
                     Dados sem método
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={() => {
                       setText(manipulationSample);
@@ -2857,7 +2866,7 @@ function App() {
                     Pressão emocional
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={handleReset}
                   >
@@ -2947,9 +2956,9 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={() => {
                       setLinkUrl("https://www.gov.br/saude/pt-br");
@@ -2961,7 +2970,7 @@ function App() {
                     Exemplo confiável
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={() => {
                       setLinkUrl("http://bit.ly/promocao-urgente-cura-milagrosa");
@@ -2973,7 +2982,7 @@ function App() {
                     Exemplo de risco
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={handleReset}
                   >
@@ -3044,7 +3053,7 @@ function App() {
                 <textarea
                   id="image-description"
                   className="min-h-28 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base leading-7 outline-none transition focus:border-teal-600 focus:bg-white focus:ring-4 focus:ring-teal-100"
-                  placeholder="Transcreva frases importantes quando quiser reforçar a análise local."
+                  placeholder="Transcreva frases importantes quando quiser reforçar a leitura da imagem."
                   value={photoDescription}
                   onChange={(event) => {
                     setPhotoDescription(event.target.value);
@@ -3053,9 +3062,9 @@ function App() {
                   }}
                 />
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                     type="button"
                     disabled={!canAnalyze || isAnalyzing}
                     onClick={handleAnalyze}
@@ -3064,7 +3073,7 @@ function App() {
                     {isAnalyzing ? "Analisando" : "Verificar foto"}
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                     type="button"
                     onClick={handleReset}
                   >
@@ -3076,7 +3085,7 @@ function App() {
             )}
           </div>
 
-          <aside className="flex flex-col gap-4">
+          <aside className="min-w-0 flex flex-col gap-4">
             {analysisState.final ? (
               <>
                 <ResultMeter result={analysisState.final} />
@@ -3085,7 +3094,6 @@ function App() {
                   reportText={reportText}
                   feedback={reportFeedback}
                   onCopy={handleCopyReport}
-                  onDownload={handleDownloadReport}
                   onDownloadPdf={handleDownloadReportPdf}
                   onShare={handleShareReport}
                   onDownloadImage={handleDownloadReportImage}
@@ -3151,7 +3159,7 @@ function App() {
                   Verificação complementar indisponível
                 </h3>
                 <p className="text-sm leading-6 text-slate-700">
-                  A checagem por regras continua ativa. Tente a verificação completa novamente em instantes.
+                  A verificação completa não está disponível agora. Tente novamente em instantes.
                 </p>
               </section>
             ) : null}

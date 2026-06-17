@@ -52,5 +52,6 @@ Quando a verificação complementar falha, o app não gera laudo final. A interf
 
 - Histórico local para recuperar análises recentes.
 - Compartilhamento por API nativa do navegador quando disponível.
-- Download de relatório em texto e imagem.
+- Download de relatório em PDF e imagem.
+- Relatório em PDF gerado em uma página, com conteúdo resumido e espaçamento fixo para evitar cortes.
 - Página `Como funciona` para explicar limites, privacidade e fluxo de análise.

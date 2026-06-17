@@ -22,8 +22,9 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - OCR pela verificação complementar para identificar texto visível em imagens.
 - Classificação por categorias: saúde, política, golpe financeiro, corrente emocional, notícia sem fonte, acusação grave, link suspeito e imagem fora de contexto.
 - Laudo curto com risco, motivo principal, sinais encontrados e próximos passos.
-- Botão para copiar o relatório ou baixar o laudo em `.pdf`, `.txt` e imagem.
+- Botão para copiar o relatório ou baixar o laudo em `.pdf` e imagem.
 - Compartilhamento do laudo e download de imagem do resultado.
+- PDF do laudo em uma página, com blocos espaçados para leitura e compartilhamento.
 - Página visual de relatório pronta para print e compartilhamento.
 - Endpoint para bot do Telegram com texto, link e imagem.
 - Histórico local das últimas análises no navegador.
@@ -31,7 +32,7 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - Medidor de confiabilidade da fonte para links.
 - Página interna com explicação do funcionamento, privacidade e arquitetura do projeto.
 - Testes automatizados para helpers de produto.
-- Testes end-to-end com Playwright para fluxo principal.
+- Testes end-to-end com Playwright para fluxo principal e responsividade mobile.
 - Limite anti-abuso leve na função de análise.
 - Regras locais usadas como apoio interno; se a verificação complementar falhar, o app evita gerar laudo para não mostrar respostas conflitantes.
 

@@ -61,7 +61,7 @@ Status: em andamento
 - melhorias visuais;
 - exemplos de textos para teste;
 - exemplos de links para teste;
-- laudo visual com exportacao em imagem, texto e PDF;
+- laudo visual com exportacao em imagem e PDF;
 - README mais completo;
 - prints ou video de demonstracao;
 - deploy publico com URL final.

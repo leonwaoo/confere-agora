@@ -100,7 +100,8 @@ test("analisa texto e mostra laudo curto", async ({ page }) => {
   await expect(page.getByText(/Laudo curto/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Copiar/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /PDF/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /TXT/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Imagem", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /TXT/i })).toHaveCount(0);
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /PDF/i }).click();
@@ -173,6 +174,7 @@ test("abre pagina visual de relatorio", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Imprimir/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /PDF/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Imagem/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /TXT/i })).toHaveCount(0);
 });
 
 test("mantem layout mobile sem rolagem horizontal", async ({ page }) => {
@@ -184,4 +186,16 @@ test("mantem layout mobile sem rolagem horizontal", async ({ page }) => {
   );
 
   expect(hasNoHorizontalOverflow).toBe(true);
+
+  await page.locator("#content-text").fill(
+    "URGENTE! Agua quente com limao cura cancer em 3 dias. Compartilhe antes que apaguem.",
+  );
+  await page.getByRole("button", { name: /Conferir agora/i }).click();
+  await expect(page.getByText(/Resultado confirmado/i)).toBeVisible();
+
+  const resultHasNoHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+  );
+
+  expect(resultHasNoHorizontalOverflow).toBe(true);
 });

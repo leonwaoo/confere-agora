@@ -15,6 +15,24 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html,
+#root {
+  min-height: 100%;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
@@ -28,15 +46,35 @@ input {
   font: inherit;
 }
 
+img,
+canvas,
+video {
+  max-width: 100%;
+}
+
+button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+button svg {
+  flex-shrink: 0;
+}
+
 textarea {
   resize: vertical;
 }
 
 .app-shell {
   position: relative;
+  overflow-x: hidden;
   background:
     linear-gradient(180deg, #eef8f3 0%, #f8faf9 42%, #f4f7f5 100%),
     #f8faf9;
+}
+
+.app-shell :where(p, h1, h2, h3, h4, li, span, a) {
+  overflow-wrap: anywhere;
 }
 
 .risk-meter-fill {
