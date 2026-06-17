@@ -1,27 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  BookOpen,
   BrainCircuit,
   Camera,
   CheckCircle2,
+  Clock3,
   Copy,
   Download,
+  ExternalLink,
   FileText,
+  GraduationCap,
+  History,
+  ImageDown,
   ImagePlus,
   Info,
   Link2,
+  ListChecks,
   Loader2,
   Newspaper,
   RotateCcw,
   SearchCheck,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Target,
+  Trash2,
   Upload,
 } from "lucide-react";
+import {
+  buildEducationTips,
+  calculateSourceReliability,
+  categoryLabels,
+  getReferenceLinksForCategories,
+} from "./productHelpers.js";
 
 const MIN_TEXT_LENGTH = 18;
+const HISTORY_STORAGE_KEY = "confere-agora:history:v1";
+const MAX_HISTORY_ITEMS = 8;
 
 const sampleText =
   "Levantamento mostra que 92% das pessoas mudaram de opinião, mas não informa instituto, amostra, data nem metodologia.";
@@ -57,18 +74,6 @@ const riskStyles = {
     bar: "bg-rose-600",
     icon: ShieldAlert,
   },
-};
-
-const categoryLabels = {
-  saude: "Saúde",
-  politica: "Política",
-  golpe: "Golpe financeiro",
-  corrente: "Corrente emocional",
-  noticia_sem_fonte: "Notícia sem fonte",
-  acusacao_grave: "Acusação grave",
-  imagem_fora_de_contexto: "Imagem fora de contexto",
-  link_suspeito: "Link suspeito",
-  outro: "Checagem geral",
 };
 
 const newsStatusContent = {
@@ -996,6 +1001,135 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
     .join("\n");
 }
 
+function loadHistoryItems() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_HISTORY_ITEMS) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistoryItems(items) {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
+  } catch {
+    // Historico local e opcional; se o navegador bloquear, o app continua funcionando.
+  }
+}
+
+function createHistoryItem({ result, localResult, aiResult, mode, input, reportText }) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    createdAt: new Date().toISOString(),
+    mode,
+    input,
+    reportText,
+    result,
+    localResult,
+    aiResult,
+  };
+}
+
+function truncateText(value, maxLength = 120) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3).trim()}...` : text;
+}
+
+function createReportImageBlob({ result, mode, input }) {
+  return new Promise((resolve) => {
+    const width = 1080;
+    const height = 1080;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    const style = riskStyles[result.risk.level] || riskStyles.baixo;
+    const riskColor = result.risk.level === "alto" ? "#be123c" : result.risk.level === "medio" ? "#b45309" : "#047857";
+    const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
+
+    context.fillStyle = "#f2f7f4";
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(64, 64, width - 128, height - 128);
+    context.strokeStyle = "#cce7dd";
+    context.lineWidth = 3;
+    context.strokeRect(64, 64, width - 128, height - 128);
+
+    context.fillStyle = "#0f766e";
+    context.font = "700 42px Inter, Arial, sans-serif";
+    context.fillText("Confere Agora", 104, 135);
+
+    context.fillStyle = "#475569";
+    context.font = "500 24px Inter, Arial, sans-serif";
+    context.fillText(`Relatório de ${getModeLabel(mode).toLowerCase()}`, 104, 176);
+
+    context.fillStyle = riskColor;
+    context.font = "700 62px Inter, Arial, sans-serif";
+    context.fillText(`Risco ${style.label}`, 104, 270);
+
+    context.fillStyle = "#0f172a";
+    context.font = "700 34px Inter, Arial, sans-serif";
+    context.fillText(`${result.risk.score}/100`, 104, 320);
+
+    context.fillStyle = "#e2e8f0";
+    context.fillRect(104, 350, 872, 18);
+    context.fillStyle = riskColor;
+    context.fillRect(104, 350, Math.max(12, Math.round(872 * (result.risk.score / 100))), 18);
+
+    context.fillStyle = "#0f172a";
+    context.font = "700 30px Inter, Arial, sans-serif";
+    context.fillText("Motivo principal", 104, 430);
+
+    context.fillStyle = "#334155";
+    context.font = "500 27px Inter, Arial, sans-serif";
+    wrapCanvasText(context, result.mainReason || result.summary, 104, 475, 850, 38, 4);
+
+    context.fillStyle = "#0f172a";
+    context.font = "700 30px Inter, Arial, sans-serif";
+    context.fillText("Resumo", 104, 650);
+
+    context.fillStyle = "#334155";
+    context.font = "500 26px Inter, Arial, sans-serif";
+    wrapCanvasText(context, result.summary, 104, 695, 850, 36, 4);
+
+    context.fillStyle = "#0f766e";
+    context.font = "700 24px Inter, Arial, sans-serif";
+    wrapCanvasText(context, categories.join("  •  ") || "Checagem geral", 104, 875, 850, 34, 2);
+
+    context.fillStyle = "#64748b";
+    context.font = "500 22px Inter, Arial, sans-serif";
+    wrapCanvasText(context, truncateText(input, 150), 104, 950, 850, 30, 2);
+
+    canvas.toBlob((blob) => resolve(blob), "image/png", 0.95);
+  });
+}
+
+function wrapCanvasText(context, text, x, y, maxWidth, lineHeight, maxLines) {
+  const words = String(text || "").split(/\s+/);
+  let line = "";
+  let lines = 0;
+
+  words.forEach((word) => {
+    if (lines >= maxLines) {
+      return;
+    }
+
+    const testLine = line ? `${line} ${word}` : word;
+    if (context.measureText(testLine).width > maxWidth && line) {
+      context.fillText(line, x, y + lines * lineHeight);
+      line = word;
+      lines += 1;
+    } else {
+      line = testLine;
+    }
+  });
+
+  if (line && lines < maxLines) {
+    context.fillText(line, x, y + lines * lineHeight);
+  }
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1286,7 +1420,147 @@ function ExtractedTextCard({ text }) {
   );
 }
 
-function ReportCard({ result, reportText, feedback, onCopy, onDownload }) {
+function SourceReliabilityCard({ metadata, linkUrl }) {
+  if (!metadata && !linkUrl) {
+    return null;
+  }
+
+  const reliability = calculateSourceReliability(metadata, linkUrl);
+  const levelLabel = reliability.level === "forte" ? "forte" : reliability.level === "parcial" ? "parcial" : "fraca";
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+        <ListChecks size={18} />
+        Confiabilidade da fonte
+      </h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-slate-600">Leitura {levelLabel}</span>
+        <span className="text-sm font-bold text-slate-950">{reliability.score}/100</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full bg-teal-700" style={{ width: `${reliability.score}%` }} />
+      </div>
+      <div className="mt-3 grid gap-2">
+        {reliability.checks.map((check) => (
+          <div className="flex items-start gap-2 text-sm leading-5 text-slate-700" key={check.label}>
+            <CheckCircle2 className={check.passed ? "mt-0.5 shrink-0 text-teal-700" : "mt-0.5 shrink-0 text-slate-300"} size={16} />
+            <span>
+              <strong className="text-slate-900">{check.label}:</strong> {check.detail}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReferenceLinksCard({ categories }) {
+  const links = getReferenceLinksForCategories(categories);
+
+  if (links.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+        <BookOpen size={18} />
+        Referências úteis
+      </h3>
+      <div className="grid gap-2">
+        {links.map((link) => (
+          <a
+            className="flex min-h-10 items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            href={link.url}
+            key={link.url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <span>{link.label}</span>
+            <ExternalLink size={15} />
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EducationCard({ result }) {
+  const tips = buildEducationTips(result);
+
+  return (
+    <section className="rounded-lg border border-teal-100 bg-[#f8fbfa] p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-950">
+        <GraduationCap size={18} />
+        Por que isso importa?
+      </h3>
+      <ul className="space-y-2 text-sm leading-6 text-slate-700">
+        {tips.map((tip) => (
+          <li className="flex gap-2" key={tip}>
+            <Info className="mt-1 shrink-0 text-teal-700" size={16} />
+            <span>{tip}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function HistoryPanel({ history, onRestore, onClear }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-950">
+          <History size={18} />
+          Histórico local
+        </h3>
+        {history.length ? (
+          <button
+            className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 px-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+            type="button"
+            onClick={onClear}
+          >
+            <Trash2 size={14} />
+            Limpar
+          </button>
+        ) : null}
+      </div>
+      {history.length ? (
+        <div className="space-y-2">
+          {history.slice(0, 5).map((item) => {
+            const style = riskStyles[item.result?.risk?.level] || riskStyles.baixo;
+
+            return (
+              <button
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-teal-200 hover:bg-teal-50"
+                key={item.id}
+                type="button"
+                onClick={() => onRestore(item)}
+              >
+                <span className="mb-1 flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                    <Clock3 size={14} />
+                    {new Date(item.createdAt).toLocaleString("pt-BR")}
+                  </span>
+                  <span className={`text-xs font-bold ${style.text}`}>{style.label}</span>
+                </span>
+                <span className="block text-sm font-bold text-slate-900">{getModeLabel(item.mode)}</span>
+                <span className="mt-1 block text-sm leading-5 text-slate-600">{truncateText(item.input || item.result?.summary, 96)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm leading-6 text-slate-600">
+          As últimas análises aparecem aqui neste navegador. Nada é salvo em banco de dados.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ReportCard({ result, reportText, feedback, onCopy, onDownload, onShare, onDownloadImage }) {
   const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
   const firstSteps = (result.verificationSteps || []).slice(0, 3);
 
@@ -1310,6 +1584,22 @@ function ReportCard({ result, reportText, feedback, onCopy, onDownload }) {
           >
             <Copy size={16} />
             Copiar
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={onShare}
+          >
+            <Share2 size={16} />
+            Compartilhar
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50"
+            type="button"
+            onClick={onDownloadImage}
+          >
+            <ImageDown size={16} />
+            Imagem
           </button>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-bold text-white transition hover:bg-slate-800"
@@ -1388,6 +1678,135 @@ function SignalList({ title, icon: Icon, result }) {
   );
 }
 
+function TopNav({ activeView, onChange }) {
+  const items = [
+    ["check", "Checar"],
+    ["how", "Como funciona"],
+    ["project", "Projeto"],
+  ];
+
+  return (
+    <nav className="flex flex-wrap gap-2">
+      {items.map(([id, label]) => (
+        <button
+          className={`min-h-9 rounded-full border px-3 text-xs font-bold transition ${
+            activeView === id
+              ? "border-teal-600 bg-teal-700 text-white"
+              : "border-teal-100 bg-white text-slate-700 hover:border-teal-200 hover:bg-teal-50"
+          }`}
+          key={id}
+          type="button"
+          onClick={() => onChange(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function HowItWorksPage() {
+  const steps = [
+    ["1", "Você envia texto, link ou foto.", "A ferramenta prepara o conteúdo e faz uma primeira leitura local."],
+    ["2", "As regras locais procuram sinais de risco.", "Fonte ausente, apelo emocional, acusação grave, números sem método e outros padrões são avaliados."],
+    ["3", "A verificação complementar roda na nuvem.", "Quando ativa, ela analisa texto, imagem ou link sem expor a chave secreta no navegador."],
+    ["4", "O laudo explica o risco.", "O resultado mostra motivo principal, categorias, próximos passos, referências e limites da leitura."],
+  ];
+
+  return (
+    <section className="grid gap-4 py-4 lg:grid-cols-[0.8fr_1fr]">
+      <div className="rounded-lg border border-teal-100 bg-white p-5 shadow-soft">
+        <h2 className="text-2xl font-bold text-slate-950">Como funciona</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          O Confere Agora não dá um veredito absoluto. Ele aponta risco, explica os sinais encontrados e orienta o que conferir antes de compartilhar.
+        </p>
+        <div className="mt-5 grid gap-3">
+          {steps.map(([number, title, detail]) => (
+            <article className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={number}>
+              <div className="mb-2 flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-700 text-sm font-bold text-white">{number}</span>
+                <h3 className="text-sm font-bold text-slate-950">{title}</h3>
+              </div>
+              <p className="text-sm leading-6 text-slate-600">{detail}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-slate-950">
+            <ShieldCheck size={19} />
+            Privacidade e segurança
+          </h3>
+          <ul className="space-y-2 text-sm leading-6 text-slate-700">
+            <li>O histórico fica apenas no navegador do usuário.</li>
+            <li>A chave da verificação em nuvem fica protegida no ambiente do deploy.</li>
+            <li>Links locais, privados ou internos são bloqueados antes da leitura.</li>
+            <li>O resultado não substitui fontes oficiais, jornalismo profissional ou agências de checagem.</li>
+          </ul>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-slate-950">
+            <GraduationCap size={19} />
+            O que observar
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2">
+            {["Fonte e autoria", "Data e contexto", "Pedido de repasse", "Promessa milagrosa", "Domínio do link", "Imagem recortada"].map((item) => (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700" key={item}>
+                {item}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function ProjectPage() {
+  return (
+    <section className="grid gap-4 py-4 lg:grid-cols-[0.85fr_1fr]">
+      <div className="rounded-lg border border-teal-100 bg-white p-5 shadow-soft">
+        <h2 className="text-2xl font-bold text-slate-950">Projeto de portfólio</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          O Confere Agora demonstra produto, frontend, integração com IA, funções serverless, segurança básica e documentação viva em um caso real de utilidade pública.
+        </p>
+        <div className="mt-5 grid gap-3">
+          {["React e Vite", "Tailwind CSS", "Vercel Functions", "Verificação em nuvem", "Fallback por regras locais", "Documentação para LinkedIn"].map((item) => (
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700" key={item}>
+              <CheckCircle2 className="text-teal-700" size={16} />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <h3 className="mb-3 text-base font-bold text-slate-950">Arquitetura</h3>
+          <div className="grid gap-3 text-sm leading-6 text-slate-700">
+            <p><strong className="text-slate-950">Frontend:</strong> experiência de análise, histórico local, relatório e interface responsiva.</p>
+            <p><strong className="text-slate-950">Backend:</strong> funções serverless para proteger segredos, ler links com segurança e chamar a verificação complementar.</p>
+            <p><strong className="text-slate-950">Documentação:</strong> README, arquitetura, decisões, plano de testes e post para LinkedIn.</p>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <h3 className="mb-3 text-base font-bold text-slate-950">Próximos passos técnicos</h3>
+          <ul className="space-y-2 text-sm leading-6 text-slate-700">
+            <li>Adicionar testes end-to-end com navegador.</li>
+            <li>Medir uso da API complementar.</li>
+            <li>Criar página de relatório compartilhável com armazenamento controlado.</li>
+            <li>Adicionar domínio próprio e analytics de privacidade.</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState("texto");
   const [text, setText] = useState("");
@@ -1401,6 +1820,8 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [reportFeedback, setReportFeedback] = useState("");
+  const [historyItems, setHistoryItems] = useState(() => loadHistoryItems());
+  const [activeView, setActiveView] = useState("check");
   const fileInputRef = useRef(null);
 
   const canAnalyze =
@@ -1440,6 +1861,53 @@ function App() {
     return "Verificação indisponível";
   }, [aiStatus]);
 
+  function addHistoryItem(nextState, inputValue) {
+    if (!nextState.final) {
+      return;
+    }
+
+    const item = createHistoryItem({
+      result: nextState.final,
+      localResult: nextState.local,
+      aiResult: nextState.ai,
+      mode,
+      input: inputValue,
+      reportText: createReportText({
+        result: nextState.final,
+        localResult: nextState.local,
+        aiResult: nextState.ai,
+        mode,
+        input: inputValue,
+      }),
+    });
+    const nextItems = [item, ...historyItems].slice(0, MAX_HISTORY_ITEMS);
+    setHistoryItems(nextItems);
+    saveHistoryItems(nextItems);
+  }
+
+  function restoreHistoryItem(item) {
+    setActiveView("check");
+    setMode(item.mode);
+    setText(item.mode === "texto" ? item.input || "" : "");
+    setLinkUrl(item.mode === "link" ? item.input || "" : "");
+    setPhotoDescription(item.mode === "foto" ? item.input || "" : "");
+    setPhoto(null);
+    setPhotoPreview("");
+    setPhotoMeta(null);
+    setAnalysisState({
+      local: item.localResult,
+      ai: item.aiResult,
+      final: item.result,
+      error: "",
+    });
+    setReportFeedback("Análise restaurada do histórico.");
+  }
+
+  function clearHistory() {
+    setHistoryItems([]);
+    saveHistoryItems([]);
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1472,6 +1940,12 @@ function App() {
 
     setReportFeedback("");
     const normalizedLinkUrl = mode === "link" ? parseUserUrl(linkUrl)?.toString() || linkUrl.trim() : "";
+    const currentInput =
+      mode === "texto"
+        ? text
+        : mode === "link"
+          ? normalizedLinkUrl
+          : photoDescription || photo?.name || "Imagem enviada";
     const localResult =
       mode === "texto"
         ? analyzeText(text)
@@ -1498,29 +1972,41 @@ function App() {
       const data = await response.json();
 
       if (!data.ok) {
-        setAnalysisState({
+        const fallbackState = {
           local: localResult,
           ai: null,
           final: localResult,
           error: data.error || "A verificação complementar não respondeu.",
-        });
+        };
+        setAnalysisState(fallbackState);
+        addHistoryItem(fallbackState, currentInput);
         return;
       }
 
       const aiResult = convertAiAnalysis(data.analysis);
-      setAnalysisState({
+      const finalResult = chooseFinalResult(localResult, aiResult);
+      const nextState = {
         local: localResult,
         ai: aiResult,
-        final: chooseFinalResult(localResult, aiResult),
+        final: finalResult,
         error: "",
-      });
+      };
+      setAnalysisState(nextState);
+
+      if (mode === "foto" && aiResult?.extractedText && !photoDescription.trim()) {
+        setPhotoDescription(aiResult.extractedText);
+      }
+
+      addHistoryItem(nextState, mode === "foto" && aiResult?.extractedText ? aiResult.extractedText : currentInput);
     } catch (error) {
-      setAnalysisState({
+      const fallbackState = {
         local: localResult,
         ai: null,
         final: localResult,
         error: error.message,
-      });
+      };
+      setAnalysisState(fallbackState);
+      addHistoryItem(fallbackState, currentInput);
     } finally {
       setIsAnalyzing(false);
     }
@@ -1563,6 +2049,57 @@ function App() {
     link.click();
     URL.revokeObjectURL(url);
     setReportFeedback("Relatório baixado.");
+  }
+
+  async function handleShareReport() {
+    if (!reportText) {
+      return;
+    }
+
+    const shareData = {
+      title: "Confere Agora",
+      text: reportText,
+      url: "https://confere-agora.vercel.app/",
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setReportFeedback("Relatório compartilhado.");
+      } else {
+        await navigator.clipboard.writeText(reportText);
+        setReportFeedback("Compartilhamento indisponível; relatório copiado.");
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        setReportFeedback("Não foi possível compartilhar agora.");
+      }
+    }
+  }
+
+  async function handleDownloadReportImage() {
+    if (!analysisState.final) {
+      return;
+    }
+
+    const blob = await createReportImageBlob({
+      result: analysisState.final,
+      mode,
+      input: reportInput,
+    });
+
+    if (!blob) {
+      setReportFeedback("Não foi possível gerar a imagem agora.");
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "confere-agora-laudo.png";
+    link.click();
+    URL.revokeObjectURL(url);
+    setReportFeedback("Imagem do laudo baixada.");
   }
 
   async function handleFile(file) {
@@ -1613,7 +2150,8 @@ function App() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+              <TopNav activeView={activeView} onChange={setActiveView} />
               <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-teal-100 bg-white px-3 text-xs font-bold text-slate-700">
                 <StatusDot active={Boolean(aiStatus.ok)} />
                 {statusLabel}
@@ -1634,6 +2172,11 @@ function App() {
           </div>
         </header>
 
+        {activeView === "how" ? (
+          <HowItWorksPage />
+        ) : activeView === "project" ? (
+          <ProjectPage />
+        ) : (
         <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.7fr)]">
           <div className="rounded-lg border border-teal-100 bg-white p-4 shadow-soft sm:p-5">
             <div className="mb-5 flex flex-col gap-4">
@@ -1946,11 +2489,19 @@ function App() {
                   feedback={reportFeedback}
                   onCopy={handleCopyReport}
                   onDownload={handleDownloadReport}
+                  onShare={handleShareReport}
+                  onDownloadImage={handleDownloadReportImage}
                 />
                 <EvidenceBadges result={analysisState.final} />
                 <NewsAssessmentCard assessment={analysisState.final.isNewsLike} />
                 <LinkMetadataCard metadata={analysisState.final.linkMetadata || analysisState.ai?.linkMetadata} />
+                <SourceReliabilityCard
+                  metadata={analysisState.final.linkMetadata || analysisState.ai?.linkMetadata}
+                  linkUrl={mode === "link" ? linkUrl : ""}
+                />
                 <ExtractedTextCard text={analysisState.final.extractedText || analysisState.ai?.extractedText} />
+                <ReferenceLinksCard categories={analysisState.final.categories} />
+                <EducationCard result={analysisState.final} />
 
                 <section className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border border-slate-200 bg-white p-3">
@@ -2021,8 +2572,11 @@ function App() {
                 </div>
               </section>
             ) : null}
+
+            <HistoryPanel history={historyItems} onRestore={restoreHistoryItem} onClear={clearHistory} />
           </aside>
         </section>
+        )}
       </div>
     </main>
   );

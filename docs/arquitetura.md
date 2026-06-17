@@ -20,12 +20,13 @@ sequenceDiagram
   A->>C: Solicita análise complementar
   C-->>A: Retorna JSON estruturado
   A-->>F: Retorna análise normalizada
-  F-->>U: Mostra laudo, selos e relatório
+  F-->>U: Mostra laudo, selos, referências, histórico e relatório
 ```
 
 ## Frontend
 
-- `src/App.jsx`: interface, regras locais, preparo de imagem, laudo e relatório.
+- `src/App.jsx`: interface, regras locais, preparo de imagem, laudo, histórico e relatório.
+- `src/productHelpers.js`: referências por categoria, confiabilidade da fonte e dicas educativas.
 - `src/styles.css`: fonte, base visual e animação da barra de risco.
 - `public/logo-confere-agora.png`: logo do projeto.
 
@@ -40,7 +41,17 @@ sequenceDiagram
 - A chave da API fica apenas nas variáveis de ambiente da Vercel.
 - Links locais, privados ou de metadados de nuvem são bloqueados antes da leitura.
 - O navegador nunca recebe a chave secreta.
+- A função de análise usa limite anti-abuso leve por IP.
+- O histórico fica em `localStorage` e não é enviado para banco de dados.
 
 ## Fallback
 
 Quando a verificação complementar falha, o app mantém o resultado por regras locais e informa que a verificação em nuvem está indisponível no momento.
+
+## Recursos de Produto
+
+- Histórico local para recuperar análises recentes.
+- Compartilhamento por API nativa do navegador quando disponível.
+- Download de relatório em texto e imagem.
+- Página `Como funciona` para explicar limites, privacidade e fluxo de análise.
+- Página `Projeto` para apresentação em portfólio.

@@ -21,6 +21,13 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - Classificação por categorias: saúde, política, golpe financeiro, corrente emocional, notícia sem fonte, acusação grave, link suspeito e imagem fora de contexto.
 - Laudo curto com risco, motivo principal, sinais encontrados e próximos passos.
 - Botão para copiar ou baixar relatório em `.txt`.
+- Compartilhamento do laudo e download de imagem do resultado.
+- Histórico local das últimas análises no navegador.
+- Referências úteis por categoria de risco.
+- Medidor de confiabilidade da fonte para links.
+- Página interna com explicação do funcionamento, privacidade e arquitetura do projeto.
+- Testes automatizados para helpers de produto.
+- Limite anti-abuso leve na função de análise.
 - Fallback por regras locais caso a verificação complementar esteja indisponível.
 
 ## Tecnologias
@@ -69,6 +76,12 @@ Acesse:
 
 ```bash
 http://127.0.0.1:5173
+```
+
+Testes:
+
+```bash
+pnpm test
 ```
 
 ## Deploy

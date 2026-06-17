@@ -74,6 +74,36 @@ Decisao: solicitar que a verificacao complementar leia texto visivel em imagens 
 
 Motivo: prints e cards frequentemente carregam a alegacao principal dentro da imagem, e depender apenas de transcricao manual reduz a utilidade da ferramenta.
 
+## 2026-06-16 - Historico local
+
+Decisao: salvar as ultimas analises no navegador usando `localStorage`.
+
+Motivo: o usuario pode recuperar laudos recentes sem criar conta, banco de dados ou coleta centralizada.
+
+## 2026-06-16 - Referencias por categoria
+
+Decisao: mostrar links uteis conforme o tipo de risco detectado.
+
+Motivo: a ferramenta deve orientar o proximo passo de checagem, nao apenas alertar que existe risco.
+
+## 2026-06-16 - Compartilhamento do laudo
+
+Decisao: permitir compartilhar o relatorio e baixar uma imagem do laudo.
+
+Motivo: isso torna o resultado mais util em conversas e mais apresentavel como projeto de portfolio.
+
+## 2026-06-16 - Limite anti-abuso
+
+Decisao: aplicar limite leve por IP na funcao `/api/analyze`.
+
+Motivo: proteger a chave de verificacao em nuvem contra uso excessivo e preservar a disponibilidade do projeto publico.
+
+## 2026-06-16 - Testes automatizados
+
+Decisao: adicionar testes com `node --test` para helpers de produto.
+
+Motivo: validar regras reutilizaveis sem adicionar dependencias pesadas ao MVP.
+
 ## Decisoes Pendentes
 
 - URL final do deploy.

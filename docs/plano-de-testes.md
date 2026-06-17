@@ -11,12 +11,18 @@
 7. Foto com texto visível deve retornar texto detectado quando a verificação complementar conseguir ler.
 8. Botão de copiar relatório deve copiar o laudo.
 9. Botão de baixar relatório deve gerar arquivo `.txt`.
-10. Em mobile, não deve haver texto estourando ou rolagem horizontal.
+10. Botão de imagem deve baixar um `.png` do laudo.
+11. Histórico local deve registrar e restaurar análises recentes.
+12. Referências por categoria devem aparecer após análise.
+13. Link analisado deve mostrar medidor de confiabilidade da fonte.
+14. Abas `Como funciona` e `Projeto` devem abrir sem perder responsividade.
+15. Em mobile, não deve haver texto estourando ou rolagem horizontal.
 
 ## Comandos de Verificação
 
 ```bash
 pnpm build
+pnpm test
 ```
 
 ## Validação de Produção
@@ -32,3 +38,4 @@ pnpm build
 - Link inválido não deve quebrar a interface.
 - Upload de imagem grande deve ser comprimido antes do envio.
 - O resultado não deve usar linguagem definitiva como "é falso" ou "é verdadeiro".
+- Rate limit deve responder com erro amigável quando houver excesso de requisições.
