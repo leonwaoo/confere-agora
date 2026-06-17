@@ -122,6 +122,12 @@ Decisao: revisar cabecalho, navegacao, botoes de acao e grids para evitar rolage
 
 Motivo: o site publico precisa funcionar bem em telas pequenas, especialmente porque o uso natural do produto acontece em celulares, ao receber links, prints e mensagens.
 
+## 2026-06-17 - Resiliencia da verificacao em nuvem
+
+Decisao: quando o provedor responder com erro temporario, alta demanda ou falha 5xx, a funcao `/api/analyze` deve tentar modelos alternativos antes de devolver falha ao usuario.
+
+Motivo: a verificacao estava configurada corretamente, mas o modelo principal podia responder `503` por alta demanda. O fallback melhora disponibilidade sem mascarar erros de chave, permissao, billing ou quota real.
+
 ## Decisoes Pendentes
 
 - URL final do deploy.

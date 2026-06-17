@@ -553,11 +553,17 @@ function normalizeLinkMetadata(linkContent) {
   };
 }
 
-const fallbackModelIds = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+const fallbackModelIds = [
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-3.5-flash",
+];
 const HEALTH_CACHE_MS = 5 * 60 * 1000;
 let healthCache = null;
 
-function getModelCandidates(config) {
+export function getModelCandidates(config) {
   return [...new Set([config.model, ...fallbackModelIds].filter(Boolean))];
 }
 
@@ -567,14 +573,24 @@ export function sanitizeErrorForLog(error) {
     .replace(/AQ\.[0-9A-Za-z_.-]+/g, "[redacted-token]");
 }
 
-function shouldTryNextModel(error) {
+export function shouldTryNextModel(error) {
   const message = String(error?.message || "").toLowerCase();
 
-  if (/(api key|permission|quota|billing|unauthorized|forbidden)/i.test(message)) {
+  if (/(api key|permission|billing|unauthorized|forbidden)/i.test(message)) {
     return false;
   }
 
-  return [400, 404].includes(error?.status);
+  if (/quota/i.test(message)) {
+    return false;
+  }
+
+  return [400, 404, 429, 500, 502, 503, 504].includes(error?.status);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function parseServiceError(response) {
@@ -644,6 +660,8 @@ export async function checkCloudAiHealth() {
       if (!shouldTryNextModel(error)) {
         break;
       }
+
+      await delay(250);
     }
   }
 
@@ -1117,6 +1135,8 @@ export async function analyzeWithGemini(payload) {
       if (!shouldTryNextModel(error)) {
         break;
       }
+
+      await delay(250);
     }
   }
 
