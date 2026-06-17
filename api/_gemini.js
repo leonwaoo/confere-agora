@@ -75,6 +75,8 @@ const scoreRanges = {
   alto: { min: 65, max: 100 },
 };
 
+const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
+
 function readEnv(name) {
   const value = process.env[name];
 
@@ -98,6 +100,8 @@ Regras:
 - Textos curtos com acusacao grave sem fonte nao devem ser tratados como baixo risco.
 - Se houver imagem, considere texto visivel, contexto visual, cortes, ausencia de fonte, sinais de print/card e possivel falta de contexto.
 - Se houver link, avalie titulo, descricao e trecho extraido da pagina. Considere dominio, autoria, data, fonte primaria e sinais de clickbait.
+- Se houver data de publicacao no link, compare com a data atual do Brasil enviada no prompt. Nao classifique como futuro quando a data for o mesmo dia no Brasil.
+- Se a data estiver em formato ambiguo ou sem fuso horario, diga que a data exige conferencia em vez de afirmar que esta no futuro.
 - Se houver imagem, extraia no campo extractedText o texto visivel que conseguir ler. Se nao houver texto, retorne string vazia.
 - Avalie se o material parece uma noticia jornalistica real: use isNewsLike.status como parece_noticia, nao_parece_noticia ou indefinido.
 - Diferencie tipos de risco em categories: saude, politica, golpe, corrente, noticia_sem_fonte, acusacao_grave, imagem_fora_de_contexto, link_suspeito ou outro.
@@ -111,6 +115,122 @@ Regras:
 - Se a evidencia for fraca, prefira cautela e classifique como medio em vez de alto.
 - Classifique como alto quando houver acusacao grave sem fonte, promessa de cura/tratamento, golpe, fraude, pedido urgente de repasse ou dano potencial relevante.
 `;
+
+function getBrazilDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BRAZIL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => {
+      if (part.type !== "literal") {
+        acc[part.type] = part.value;
+      }
+
+      return acc;
+    }, {});
+
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    label: `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`,
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+  };
+}
+
+function dateOnlyUtc(parts) {
+  return Date.UTC(parts.year, parts.month - 1, parts.day);
+}
+
+function parseBrazilianDateOnly(value) {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return null;
+  }
+
+  const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (isoMatch) {
+    return {
+      date: `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`,
+      year: Number(isoMatch[1]),
+      month: Number(isoMatch[2]),
+      day: Number(isoMatch[3]),
+    };
+  }
+
+  const brMatch = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+  if (brMatch) {
+    const year = Number(brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3]);
+    const month = Number(brMatch[2]);
+    const day = Number(brMatch[1]);
+
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return {
+        date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        year,
+        month,
+        day,
+      };
+    }
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return getBrazilDateParts(parsed);
+  }
+
+  return null;
+}
+
+export function classifyPublishedDate(publishedDate, now = new Date()) {
+  const today = getBrazilDateParts(now);
+  const published = parseBrazilianDateOnly(publishedDate);
+
+  if (!published) {
+    return {
+      status: "indefinido",
+      today: today.date,
+      label: "Data nao interpretada automaticamente.",
+    };
+  }
+
+  const diffDays = Math.round((dateOnlyUtc(published) - dateOnlyUtc(today)) / 86_400_000);
+
+  if (diffDays > 0) {
+    return {
+      status: "futuro",
+      today: today.date,
+      publishedDate: published.date,
+      diffDays,
+      label: "A data publicada parece posterior a data atual no Brasil.",
+    };
+  }
+
+  if (diffDays === 0) {
+    return {
+      status: "hoje",
+      today: today.date,
+      publishedDate: published.date,
+      diffDays,
+      label: "A data publicada e de hoje no Brasil.",
+    };
+  }
+
+  return {
+    status: "passado",
+    today: today.date,
+    publishedDate: published.date,
+    diffDays,
+    label: "A data publicada e anterior a data atual no Brasil.",
+  };
+}
 
 export function getCloudAiConfig() {
   return {
@@ -139,8 +259,14 @@ export function parseDataUrl(dataUrl) {
 }
 
 export function buildPrompt(payload) {
+  const currentBrazilDate = getBrazilDateParts();
   const input = {
     tipo: payload.mode,
+    contexto_temporal: {
+      data_atual_brasil: currentBrazilDate.date,
+      data_hora_atual_brasil: currentBrazilDate.label,
+      regra: "Compare datas de noticias usando esta data atual no Brasil. So chame de futuro se o status temporal extraido confirmar futuro.",
+    },
     texto: payload.text || "",
     link_url: payload.linkUrl || "",
     conteudo_extraido_do_link: payload.linkContent || null,
@@ -385,6 +511,7 @@ function normalizeLinkMetadata(linkContent) {
     description: cleanText(linkContent.description, 220),
     author: cleanText(linkContent.author, 100),
     publishedDate: cleanText(linkContent.publishedDate, 80),
+    publishedDateStatus: linkContent.publishedDateStatus || null,
     canonicalUrl: linkContent.canonicalUrl || "",
   };
 }
@@ -649,6 +776,14 @@ function decodeHtmlEntities(value) {
     .replace(/&gt;/gi, ">");
 }
 
+function normalizeWhitespace(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function cleanArticleText(value) {
+  return normalizeWhitespace(String(value || "").replace(/\[[^\]]+\]/g, " "));
+}
+
 function extractMetaContent(html, name) {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(
@@ -686,6 +821,94 @@ function extractPublishedDate(html) {
   );
 }
 
+function flattenStructuredData(value) {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => flattenStructuredData(item));
+  }
+
+  if (typeof value !== "object") {
+    return [];
+  }
+
+  return [value, ...flattenStructuredData(value["@graph"])];
+}
+
+function extractStructuredDataObjects(html) {
+  const objects = [];
+  const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match = regex.exec(html);
+
+  while (match) {
+    try {
+      const parsed = JSON.parse(decodeHtmlEntities(match[1]).trim());
+      objects.push(...flattenStructuredData(parsed));
+    } catch {
+      // Dados estruturados quebrados nao devem impedir a leitura do HTML.
+    }
+
+    match = regex.exec(html);
+  }
+
+  return objects;
+}
+
+function getStructuredType(value) {
+  const type = value?.["@type"];
+
+  if (Array.isArray(type)) {
+    return type.join(" ");
+  }
+
+  return String(type || "");
+}
+
+function readStructuredName(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(readStructuredName).filter(Boolean).join(", ");
+  }
+
+  return value.name || "";
+}
+
+function extractStructuredArticle(html) {
+  const objects = extractStructuredDataObjects(html);
+  const article =
+    objects.find((item) => /newsarticle|reportagenewsarticle|article/i.test(getStructuredType(item))) ||
+    objects.find((item) => item.articleBody || item.datePublished || item.headline);
+
+  if (!article) {
+    return null;
+  }
+
+  return {
+    title: normalizeWhitespace(article.headline || article.name),
+    description: normalizeWhitespace(article.description),
+    author: normalizeWhitespace(readStructuredName(article.author)),
+    publishedDate: normalizeWhitespace(article.datePublished),
+    modifiedDate: normalizeWhitespace(article.dateModified),
+    body: cleanArticleText(article.articleBody),
+  };
+}
+
+function extractTagText(html, tagName) {
+  const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
+  const match = html.match(regex);
+
+  return match ? stripHtml(match[1]) : "";
+}
+
 function stripHtml(html) {
   return decodeHtmlEntities(
     String(html || "")
@@ -699,8 +922,18 @@ function stripHtml(html) {
   );
 }
 
-function summarizeHtml(html, finalUrl) {
+function extractBestExcerpt(html, structuredArticle) {
+  return (
+    structuredArticle?.body ||
+    extractTagText(html, "article") ||
+    extractTagText(html, "main") ||
+    stripHtml(html)
+  ).slice(0, 3_200);
+}
+
+export function summarizeHtml(html, finalUrl) {
   const parsedUrl = new URL(finalUrl);
+  const structuredArticle = extractStructuredArticle(html);
   const title = decodeHtmlEntities(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").trim();
   const h1 = decodeHtmlEntities(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "")
     .replace(/<[^>]+>/g, " ")
@@ -712,21 +945,24 @@ function summarizeHtml(html, finalUrl) {
     extractMetaContent(html, "twitter:description");
   const siteName = extractMetaContent(html, "og:site_name") || parsedUrl.hostname.replace(/^www\./, "");
   const author =
+    structuredArticle?.author ||
     extractMetaContent(html, "author") ||
     extractMetaContent(html, "article:author") ||
     extractMetaContent(html, "twitter:creator");
-  const publishedDate = extractPublishedDate(html);
+  const publishedDate = structuredArticle?.publishedDate || extractPublishedDate(html);
+  const publishedDateStatus = classifyPublishedDate(publishedDate);
   const canonicalUrl = extractLinkHref(html, "canonical");
-  const excerpt = stripHtml(html).slice(0, 3_200);
+  const excerpt = extractBestExcerpt(html, structuredArticle);
 
   return {
-    title,
+    title: structuredArticle?.title || title,
     h1,
-    description,
+    description: structuredArticle?.description || description,
     siteName,
     domain: parsedUrl.hostname.replace(/^www\./, ""),
     author,
     publishedDate,
+    publishedDateStatus,
     canonicalUrl: canonicalUrl ? new URL(canonicalUrl, parsedUrl).toString() : "",
     excerpt,
   };
