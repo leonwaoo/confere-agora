@@ -17,6 +17,8 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - Análise de texto, link e foto.
 - Leitura segura de páginas públicas para extrair título, descrição, domínio, autor e data quando disponíveis.
 - Verificação complementar em nuvem, sem depender do computador do desenvolvedor.
+- Laudo exibido somente quando a verificação complementar confirma a leitura.
+- Identificação de plausibilidade: plausível, improvável, absurdo ou indefinido.
 - OCR pela verificação complementar para identificar texto visível em imagens.
 - Classificação por categorias: saúde, política, golpe financeiro, corrente emocional, notícia sem fonte, acusação grave, link suspeito e imagem fora de contexto.
 - Laudo curto com risco, motivo principal, sinais encontrados e próximos passos.
@@ -31,7 +33,7 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 - Testes automatizados para helpers de produto.
 - Testes end-to-end com Playwright para fluxo principal.
 - Limite anti-abuso leve na função de análise.
-- Fallback por regras locais caso a verificação complementar esteja indisponível.
+- Regras locais usadas como apoio interno; se a verificação complementar falhar, o app evita gerar laudo para não mostrar respostas conflitantes.
 
 ## Tecnologias
 
@@ -46,12 +48,12 @@ O objetivo do projeto é ajudar pessoas a perceber sinais de alerta antes de com
 
 ```mermaid
 flowchart LR
-  A["Usuário envia texto, link ou foto"] --> B["Regras locais no navegador"]
-  B --> C["Resultado preliminar"]
+  A["Usuário envia texto, link ou foto"] --> B["Pré-checagem interna no navegador"]
+  B --> C["Contexto técnico para a análise"]
   C --> D["Função serverless /api/analyze"]
   D --> E["Leitura segura de link ou imagem"]
   E --> F["Verificação complementar em nuvem"]
-  F --> G["Laudo final com risco, categorias e próximos passos"]
+  F --> G["Laudo confirmado com risco, plausibilidade e próximos passos"]
 ```
 
 ## Como Rodar Localmente

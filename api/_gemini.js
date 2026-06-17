@@ -34,6 +34,14 @@ export const analysisSchema = {
       },
       required: ["status", "detail"],
     },
+    plausibility: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["plausivel", "improvavel", "absurdo", "indefinido"] },
+        detail: { type: "string" },
+      },
+      required: ["status", "detail"],
+    },
     extractedText: { type: "string" },
     signals: {
       type: "array",
@@ -62,6 +70,7 @@ export const analysisSchema = {
     "mainReason",
     "categories",
     "isNewsLike",
+    "plausibility",
     "extractedText",
     "signals",
     "verificationSteps",
@@ -104,6 +113,11 @@ Regras:
 - Se a data estiver em formato ambiguo ou sem fuso horario, diga que a data exige conferencia em vez de afirmar que esta no futuro.
 - Se houver imagem, extraia no campo extractedText o texto visivel que conseguir ler. Se nao houver texto, retorne string vazia.
 - Avalie se o material parece uma noticia jornalistica real: use isNewsLike.status como parece_noticia, nao_parece_noticia ou indefinido.
+- Avalie tambem se a alegacao parece plausivel, improvavel, absurda ou indefinida no campo plausibility.
+- Use plausibility.status="absurdo" quando a mensagem contrariar conhecimento basico ou fizer promessa extrema sem mecanismo plausivel, como cura milagrosa em poucos dias, premio impossivel, conspiracao totalizante ou fato fisicamente improvavel.
+- Use plausibility.status="improvavel" quando a mensagem ate poderia ocorrer, mas faltam evidencias, fonte, contexto, metodo ou confirmacao independente.
+- Use plausibility.status="plausivel" somente quando o conteudo for coerente, especifico e apoiado por dados lidos no link, fonte ou contexto enviado.
+- Se faltar contexto para julgar plausibilidade, use plausibility.status="indefinido" e explique a limitacao.
 - Diferencie tipos de risco em categories: saude, politica, golpe, corrente, noticia_sem_fonte, acusacao_grave, imagem_fora_de_contexto, link_suspeito ou outro.
 - Responda em portugues do Brasil.
 - Retorne somente JSON aderente ao schema.
@@ -271,11 +285,11 @@ export function buildPrompt(payload) {
     link_url: payload.linkUrl || "",
     conteudo_extraido_do_link: payload.linkContent || null,
     texto_descrito_da_imagem: payload.photoDescription || "",
-    resultado_das_regras_locais: payload.localResult || null,
+    sinais_iniciais_do_navegador: payload.localResult || null,
   };
 
   return `
-Analise o conteudo abaixo como possivel desinformacao. Use as regras locais apenas como apoio; corrija a classificacao se a regra local estiver subestimando o risco.
+Analise o conteudo abaixo como possivel desinformacao. Use os sinais iniciais apenas como apoio; corrija a classificacao se eles estiverem subestimando o risco.
 
 ${JSON.stringify(input, null, 2)}
 `;
@@ -403,6 +417,28 @@ function normalizeNewsLike(value) {
   };
 }
 
+function normalizePlausibility(value, level) {
+  const status = normalizeEnum(
+    value?.status,
+    ["plausivel", "improvavel", "absurdo", "indefinido"],
+    level === "alto" ? "improvavel" : "indefinido",
+  );
+
+  const fallback =
+    status === "absurdo"
+      ? "A mensagem apresenta uma alegacao extrema ou pouco coerente com o contexto disponivel."
+      : status === "improvavel"
+        ? "A mensagem pode ate ser possivel, mas faltam evidencias suficientes para confiar nela."
+        : status === "plausivel"
+          ? "A mensagem parece coerente com os dados lidos, mas ainda exige fonte e contexto."
+          : "Falta contexto suficiente para julgar se a mensagem e plausivel ou absurda.";
+
+  return {
+    status,
+    detail: cleanText(value?.detail, 180, fallback),
+  };
+}
+
 function normalizeObjectiveSummary(summary, level) {
   const text = cleanText(
     summary,
@@ -454,7 +490,7 @@ function normalizeAnalysis(analysis) {
           severity: level,
           title: "Checagem necessaria",
           detail: "A verificacao complementar nao retornou sinais detalhados suficientes.",
-          recommendation: "Use o resultado por regras e confira a fonte original.",
+          recommendation: "Tente novamente e confira a fonte original antes de compartilhar.",
         },
         0,
       ),
@@ -473,6 +509,7 @@ function normalizeAnalysis(analysis) {
     ),
     categories: normalizeCategories(analysis?.categories),
     isNewsLike: normalizeNewsLike(analysis?.isNewsLike),
+    plausibility: normalizePlausibility(analysis?.plausibility, level),
     extractedText: cleanText(analysis?.extractedText, 320, ""),
     signals,
     verificationSteps:

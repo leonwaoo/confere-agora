@@ -8,9 +8,9 @@ O MVP do Confere Agora foca em uma experiencia simples:
 2. No modo texto, cola um conteudo recebido.
 3. No modo foto, envia uma imagem, print ou card.
 4. No modo link, cola uma URL publica para leitura segura.
-5. A aplicacao analisa o conteudo com regras locais.
-6. A aplicacao chama a verificacao complementar no servidor quando a chave estiver configurada.
-7. O resultado mostra nivel de risco, sinais encontrados e recomendacoes.
+5. A aplicacao organiza sinais iniciais para apoiar a leitura.
+6. A aplicacao chama a verificacao complementar no servidor.
+7. O resultado so aparece quando a verificacao complementar confirma a leitura.
 
 ## Funcionalidades do MVP
 
@@ -21,7 +21,7 @@ O MVP do Confere Agora foca em uma experiencia simples:
 - Leitura segura de titulo, descricao e trecho de paginas publicas.
 - Redimensionamento de imagem antes do envio.
 - Botao para iniciar analise.
-- Identificacao de sinais de alerta por regras locais.
+- Identificacao de sinais de alerta para apoiar a verificacao.
 - Analise complementar no servidor.
 - Pontuacao de risco.
 - Resultado com explicacoes claras.

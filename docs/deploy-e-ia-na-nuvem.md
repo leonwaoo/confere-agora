@@ -12,7 +12,7 @@ Para isso, a verificacao complementar roda em uma funcao serverless e chama uma 
 - Deploy recomendado: Vercel
 - Backend leve: Vercel Functions em `api/`
 - Verificacao complementar: API em nuvem
-- Fallback: regras locais no navegador
+- Falha segura: se a nuvem nao confirmar, o app nao gera laudo final
 
 ## Variaveis de Ambiente
 
@@ -48,15 +48,15 @@ CLOUD_AI_API_KEY
 ## Como a Checagem Funciona
 
 1. O usuario envia texto, imagem ou link.
-2. O navegador calcula uma analise inicial por regras locais.
+2. O navegador organiza sinais iniciais como contexto tecnico.
 3. O frontend chama `/api/analyze`.
 4. A funcao serverless chama a API de verificacao em nuvem.
-5. O resultado final combina a classificacao local e a resposta complementar.
+5. O resultado final so aparece quando a verificacao complementar confirma a leitura.
 
 ## Limites
 
 - A verificacao complementar nao confirma verdade ou mentira de forma definitiva.
 - A API em nuvem pode ter limite gratuito de uso.
-- Se a chave nao estiver configurada, o app continua funcionando com regras locais.
+- Se a chave nao estiver configurada ou a API falhar, o app informa que a verificacao nao foi concluida.
 - Imagens sao redimensionadas antes do envio para reduzir falhas por tamanho.
 - Links sao lidos com limite de tamanho e bloqueio de enderecos locais ou privados.

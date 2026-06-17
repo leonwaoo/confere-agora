@@ -100,6 +100,33 @@ const newsStatusContent = {
   },
 };
 
+const plausibilityContent = {
+  absurdo: {
+    label: "Parece absurdo",
+    detail: "A alegação soa extrema ou incompatível com o contexto disponível.",
+    className: "border-rose-200 bg-rose-50 text-rose-800",
+    icon: ShieldAlert,
+  },
+  improvavel: {
+    label: "Parece improvável",
+    detail: "Pode até ser possível, mas faltam evidências para confiar.",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
+    icon: AlertTriangle,
+  },
+  plausivel: {
+    label: "Parece plausível",
+    detail: "O conteúdo parece coerente, mas ainda precisa de fonte e contexto.",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    icon: CheckCircle2,
+  },
+  indefinido: {
+    label: "Plausibilidade indefinida",
+    detail: "Falta contexto suficiente para dizer se a mensagem é plausível ou absurda.",
+    className: "border-slate-200 bg-slate-50 text-slate-700",
+    icon: Info,
+  },
+};
+
 const sourceTerms = [
   "fonte",
   "segundo",
@@ -929,6 +956,7 @@ function convertAiAnalysis(aiAnalysis) {
     mainReason: aiAnalysis.mainReason,
     categories: normalizeCategories(aiAnalysis.categories),
     isNewsLike: normalizeNewsAssessment(aiAnalysis.isNewsLike),
+    plausibility: aiAnalysis.plausibility || null,
     extractedText: aiAnalysis.extractedText || "",
     linkMetadata: aiAnalysis.linkMetadata || null,
     verificationSteps: aiAnalysis.verificationSteps || [],
@@ -946,20 +974,16 @@ function convertAiAnalysis(aiAnalysis) {
 
 function chooseFinalResult(localResult, aiResult) {
   if (!aiResult) {
-    return localResult;
+    return null;
   }
 
-  const riskOrder = { baixo: 1, medio: 2, alto: 3 };
-  const aiIsHigher = riskOrder[aiResult.risk.level] >= riskOrder[localResult.risk.level];
-  const chosen = aiIsHigher ? aiResult : localResult;
-
   return {
-    ...chosen,
-    categories: uniqueItems([...(chosen.categories || []), ...(aiResult.categories || [])]).slice(0, 4),
-    mainReason: chosen.mainReason || aiResult.mainReason || localResult.mainReason,
-    isNewsLike: aiResult.isNewsLike || chosen.isNewsLike,
-    extractedText: aiResult.extractedText || chosen.extractedText || "",
-    linkMetadata: aiResult.linkMetadata || chosen.linkMetadata || null,
+    ...aiResult,
+    categories: uniqueItems([...(aiResult.categories || []), ...(localResult?.categories || [])]).slice(0, 4),
+    mainReason: aiResult.mainReason || localResult?.mainReason,
+    isNewsLike: aiResult.isNewsLike || localResult?.isNewsLike,
+    extractedText: aiResult.extractedText || localResult?.extractedText || "",
+    linkMetadata: aiResult.linkMetadata || localResult?.linkMetadata || null,
   };
 }
 
@@ -973,6 +997,7 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
   }
 
   const news = result.isNewsLike ? newsStatusContent[result.isNewsLike.status] : null;
+  const plausibility = result.plausibility ? plausibilityContent[result.plausibility.status] : null;
   const categories = (result.categories || []).map((category) => categoryLabels[category]).filter(Boolean);
   const badges = buildEvidenceBadges(result);
   const signals = (result.signals || []).slice(0, 3);
@@ -989,6 +1014,7 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
     `Motivo principal: ${result.mainReason || result.summary}`,
     `Resumo: ${result.summary}`,
     news ? `Formato de notícia: ${news.label} - ${result.isNewsLike.detail}` : "",
+    plausibility ? `Plausibilidade: ${plausibility.label} - ${result.plausibility.detail}` : "",
     categories.length ? `Categorias: ${categories.join(", ")}` : "",
     badges.length ? `Selos: ${badges.join(", ")}` : "",
     "",
@@ -998,8 +1024,7 @@ function createReportText({ result, localResult, aiResult, mode, input }) {
     "Próximos passos:",
     ...steps.map((step) => `- ${step}`),
     "",
-    `Regras locais: ${localResult?.risk?.score ?? "-"} / 100`,
-    `Verificação complementar: ${aiResult?.risk?.score ?? "indisponível"} / 100`,
+    `Verificação confirmada: ${aiResult?.risk?.score ?? result.risk.score} / 100`,
     `Observação: ${REPORT_LIMIT_NOTICE}`,
   ]
     .filter((line) => line !== "")
@@ -1586,7 +1611,7 @@ function ResultMeter({ result }) {
             <Icon size={24} />
           </span>
           <div>
-            <p className="text-sm font-semibold text-slate-500">Resultado final</p>
+            <p className="text-sm font-semibold text-slate-500">Resultado confirmado</p>
             <h2 className={`text-2xl font-bold ${style.text}`}>Risco {style.label}</h2>
           </div>
         </div>
@@ -1646,6 +1671,25 @@ function NewsAssessmentCard({ assessment }) {
         {content.label}
       </h3>
       <p className="text-sm leading-6">{assessment.detail || content.detail}</p>
+    </section>
+  );
+}
+
+function PlausibilityCard({ plausibility }) {
+  if (!plausibility) {
+    return null;
+  }
+
+  const content = plausibilityContent[plausibility.status] || plausibilityContent.indefinido;
+  const Icon = content.icon;
+
+  return (
+    <section className={`rounded-lg border p-4 ${content.className}`}>
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-bold">
+        <Icon size={18} />
+        {content.label}
+      </h3>
+      <p className="text-sm leading-6">{plausibility.detail || content.detail}</p>
     </section>
   );
 }
@@ -2252,10 +2296,10 @@ function TopNav({ activeView, onChange }) {
 
 function HowItWorksPage() {
   const steps = [
-    ["1", "Você envia texto, link ou foto.", "A ferramenta prepara o conteúdo e faz uma primeira leitura local."],
-    ["2", "As regras locais procuram sinais de risco.", "Fonte ausente, apelo emocional, acusação grave, números sem método e outros padrões são avaliados."],
-    ["3", "A verificação complementar roda na nuvem.", "Quando ativa, ela analisa texto, imagem ou link sem expor a chave secreta no navegador."],
-    ["4", "O laudo explica o risco.", "O resultado mostra motivo principal, categorias, próximos passos, referências e limites da leitura."],
+    ["1", "Você envia texto, link ou foto.", "A ferramenta prepara o conteúdo e organiza sinais iniciais para a checagem."],
+    ["2", "A verificação roda na nuvem.", "A análise confere texto, imagem ou link sem expor a chave secreta no navegador."],
+    ["3", "O app avalia se parece absurdo.", "Promessas extremas, acusações graves, fonte ausente e apelo emocional entram na leitura."],
+    ["4", "O laudo aparece só depois da confirmação.", "O resultado mostra risco, plausibilidade, próximos passos, referências e limites da leitura."],
   ];
 
   return (
@@ -2464,7 +2508,7 @@ function App() {
           : analyzePhoto(photo, photoMeta, photoDescription);
 
     setIsAnalyzing(true);
-    setAnalysisState({ local: localResult, ai: null, final: localResult, error: "" });
+    setAnalysisState({ local: localResult, ai: null, final: null, error: "" });
 
     try {
       const response = await fetch("/api/analyze", {
@@ -2484,14 +2528,12 @@ function App() {
       if (!data.ok) {
         const enrichedLocalResult =
           data.linkMetadata && mode === "link" ? { ...localResult, linkMetadata: data.linkMetadata } : localResult;
-        const fallbackState = {
+        setAnalysisState({
           local: enrichedLocalResult,
           ai: null,
-          final: enrichedLocalResult,
+          final: null,
           error: data.error || "A verificação complementar não respondeu.",
-        };
-        setAnalysisState(fallbackState);
-        addHistoryItem(fallbackState, currentInput);
+        });
         return;
       }
 
@@ -2511,14 +2553,12 @@ function App() {
 
       addHistoryItem(nextState, mode === "foto" && aiResult?.extractedText ? aiResult.extractedText : currentInput);
     } catch (error) {
-      const fallbackState = {
+      setAnalysisState({
         local: localResult,
         ai: null,
-        final: localResult,
+        final: null,
         error: error.message,
-      };
-      setAnalysisState(fallbackState);
-      addHistoryItem(fallbackState, currentInput);
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -3053,6 +3093,7 @@ function App() {
                 />
                 <EvidenceBadges result={analysisState.final} />
                 <NewsAssessmentCard assessment={analysisState.final.isNewsLike} />
+                <PlausibilityCard plausibility={analysisState.final.plausibility} />
                 <LinkMetadataCard metadata={analysisState.final.linkMetadata || analysisState.ai?.linkMetadata} />
                 <SourceReliabilityCard
                   metadata={analysisState.final.linkMetadata || analysisState.ai?.linkMetadata}
@@ -3061,44 +3102,6 @@ function App() {
                 <ExtractedTextCard text={analysisState.final.extractedText || analysisState.ai?.extractedText} />
                 <ReferenceLinksCard categories={analysisState.final.categories} />
                 <EducationCard result={analysisState.final} />
-
-                <section className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
-                      <FileText size={15} />
-                      Regras
-                    </p>
-                    <div className="flex items-center justify-between gap-3">
-                      <RiskPill level={analysisState.local.risk.level} />
-                      <span className="text-sm font-bold text-slate-900">{analysisState.local.risk.score}/100</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
-                      <BrainCircuit size={15} />
-                      Verificação complementar
-                    </p>
-                    {analysisState.ai ? (
-                      <div className="flex items-center justify-between gap-3">
-                        <RiskPill level={analysisState.ai.risk.level} />
-                        <span className="text-sm font-bold text-slate-900">{analysisState.ai.risk.score}/100</span>
-                      </div>
-                    ) : (
-                      <p className="text-sm font-bold text-amber-700">Indisponível agora</p>
-                    )}
-                  </div>
-                </section>
-
-                {analysisState.error ? (
-                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                    <div className="mb-1 flex items-center gap-2 font-bold">
-                      <Info size={17} />
-                      Verificação complementar indisponível
-                    </div>
-                    <p>{analysisState.error}</p>
-                  </section>
-                ) : null}
 
                 {analysisState.ai?.limitations ? (
                   <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
@@ -3110,11 +3113,35 @@ function App() {
                   </section>
                 ) : null}
 
-                <SignalList title="Análise por regras" icon={FileText} result={analysisState.local} />
-                <SignalList title="Verificação complementar" icon={BrainCircuit} result={analysisState.ai} />
+                <SignalList title="Sinais verificados" icon={BrainCircuit} result={analysisState.final} />
               </>
             ) : (
-              <EmptyState mode={mode} />
+              <>
+                <EmptyState mode={mode} />
+                {isAnalyzing ? (
+                  <section className="rounded-lg border border-teal-100 bg-white p-4 shadow-soft">
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
+                      <Loader2 className="animate-spin text-teal-700" size={18} />
+                      Aguardando confirmação
+                    </h3>
+                    <p className="text-sm leading-6 text-slate-600">
+                      O laudo só aparece quando a verificação complementar concluir a leitura.
+                    </p>
+                  </section>
+                ) : null}
+                {analysisState.error ? (
+                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                    <div className="mb-1 flex items-center gap-2 font-bold">
+                      <Info size={17} />
+                      Verificação não concluída
+                    </div>
+                    <p>{analysisState.error}</p>
+                    <p className="mt-2 font-semibold">
+                      Para evitar duas respostas conflitantes, nenhum laudo foi gerado sem a confirmação da IA.
+                    </p>
+                  </section>
+                ) : null}
+              </>
             )}
 
             {!aiStatus.loading && !aiStatus.ok ? (

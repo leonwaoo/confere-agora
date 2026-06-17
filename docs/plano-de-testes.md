@@ -10,14 +10,16 @@
 6. Foto deve aceitar upload, mostrar prévia e enviar imagem para verificação complementar.
 7. Foto com texto visível deve retornar texto detectado quando a verificação complementar conseguir ler.
 8. Botão de copiar relatório deve copiar o laudo.
-9. Botão de PDF deve gerar um laudo `.pdf` com logo, risco, motivo, sinais, próximos passos, data e aviso de limite.
-10. Botão de baixar relatório deve gerar arquivo `.txt`.
-11. Botão de imagem deve baixar um `.png` do laudo.
-12. Histórico local deve registrar e restaurar análises recentes.
-13. Referências por categoria devem aparecer após análise.
-14. Link analisado deve mostrar medidor de confiabilidade da fonte.
-15. Abas `Como funciona` e `Projeto` devem abrir sem perder responsividade.
-16. Em mobile, não deve haver texto estourando ou rolagem horizontal.
+9. Quando a verificação complementar falhar, nenhum laudo final deve ser exibido.
+10. O resultado confirmado deve indicar se a mensagem parece plausível, improvável, absurda ou indefinida.
+11. Botão de PDF deve gerar um laudo `.pdf` com logo, risco, motivo, sinais, próximos passos, data e aviso de limite.
+12. Botão de baixar relatório deve gerar arquivo `.txt`.
+13. Botão de imagem deve baixar um `.png` do laudo.
+14. Histórico local deve registrar e restaurar análises recentes.
+15. Referências por categoria devem aparecer após análise.
+16. Link analisado deve mostrar medidor de confiabilidade da fonte.
+17. Aba `Como funciona` deve abrir sem perder responsividade.
+18. Em mobile, não deve haver texto estourando ou rolagem horizontal.
 
 ## Comandos de Verificação
 
@@ -42,6 +44,7 @@ Os testes Playwright cobrem:
 - Upload de foto.
 - Ações de relatório.
 - Download do PDF do laudo.
+- Falha da verificação complementar sem exibir laudo.
 - Layout mobile sem rolagem horizontal.
 
 ## Validação de Produção

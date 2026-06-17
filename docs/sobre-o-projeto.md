@@ -17,7 +17,7 @@ O Confere Agora ajuda o usuário a pausar antes de compartilhar. A ferramenta an
 
 ## Diferencial
 
-O projeto combina regras locais explicáveis com verificação complementar em nuvem. Assim, o app continua oferecendo uma análise inicial mesmo se a API externa estiver indisponível.
+O projeto usa uma verificação complementar em nuvem e só mostra laudo quando a leitura é concluída. Se a API externa estiver indisponível, o app informa a falha em vez de exibir uma segunda resposta conflitante.
 
 ## Público
 

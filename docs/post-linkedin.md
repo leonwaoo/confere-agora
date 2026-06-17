@@ -10,7 +10,7 @@ O projeto permite analisar:
 - link;
 - foto ou print.
 
-Ele combina regras locais explicáveis com verificação complementar em nuvem. O resultado não tenta dar um "veredito absoluto"; ele mostra um laudo curto com nível de risco, motivo principal, sinais encontrados, categorias e próximos passos de checagem.
+Ele usa uma verificação complementar em nuvem para gerar um laudo curto somente quando a leitura é concluída. O resultado não tenta dar um "veredito absoluto"; ele mostra nível de risco, motivo principal, sinais encontrados, plausibilidade, categorias e próximos passos de checagem.
 
 Alguns recursos que implementei:
 
@@ -18,7 +18,7 @@ Alguns recursos que implementei:
 - análise de imagens com texto detectado pela verificação complementar;
 - categorias como saúde, política, golpe financeiro, corrente emocional e notícia sem fonte;
 - relatório copiável ou baixável;
-- fallback por regras locais caso a verificação complementar esteja indisponível;
+- falha segura: quando a verificação complementar não responde, nenhum laudo final é exibido;
 - deploy público na Vercel.
 
 Tecnologias usadas:

@@ -42,7 +42,7 @@ Status: primeira versao concluida
 - analise de texto;
 - analise de imagem;
 - analise de link;
-- fallback para regras locais quando a chave nao estiver configurada.
+- falha segura sem laudo final quando a verificacao em nuvem nao responder.
 
 ## Etapa 5 - Deploy Publico
 

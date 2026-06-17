@@ -70,7 +70,7 @@ export default async function handler(request, response) {
       error:
         error.name === "AbortError"
           ? "A verificação complementar demorou para responder."
-          : "A verificação complementar não respondeu agora. Use o resultado por regras e tente novamente em instantes.",
+          : "A verificação complementar não respondeu agora. Tente novamente em instantes.",
     });
   }
 }

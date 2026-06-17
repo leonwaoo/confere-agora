@@ -32,9 +32,48 @@ async function mockApi(page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        ok: false,
-        linkMetadata,
-        error: "Mock E2E: verificacao complementar indisponivel.",
+        ok: true,
+        analysis: {
+          level: "alto",
+          score: 92,
+          confidence: "alta",
+          summary:
+            "Há risco alto: a mensagem faz uma promessa extrema sem fonte confiável e pressiona o compartilhamento.",
+          mainReason: "Promessa absurda de cura rápida sem evidência confiável.",
+          categories: payload.mode === "link" ? ["noticia_sem_fonte"] : ["saude", "corrente"],
+          isNewsLike: {
+            status: payload.mode === "link" ? "parece_noticia" : "nao_parece_noticia",
+            detail:
+              payload.mode === "link"
+                ? "O link tem formato de página pública, mas ainda exige leitura crítica."
+                : "A mensagem tem formato de corrente, não de notícia.",
+          },
+          plausibility: {
+            status: payload.mode === "link" ? "plausivel" : "absurdo",
+            detail:
+              payload.mode === "link"
+                ? "A estrutura do link parece plausível, mas o conteúdo ainda precisa de fonte e contexto."
+                : "A promessa de cura em poucos dias é extrema e incompatível com evidência médica básica.",
+          },
+          extractedText: payload.mode === "foto" ? "Compartilhe antes que apaguem" : "",
+          signals: [
+            {
+              title: "Promessa extrema sem evidência",
+              severity: "alto",
+              detail: "O conteúdo afirma algo forte sem apresentar fonte verificável.",
+              recommendation: "Procure fonte oficial ou checagem independente.",
+            },
+            {
+              title: "Pressão para compartilhar",
+              severity: "alto",
+              detail: "A mensagem incentiva repasse rápido antes da checagem.",
+              recommendation: "Evite compartilhar sob pressão.",
+            },
+          ],
+          verificationSteps: ["Conferir fonte original", "Verificar data e contexto", "Comparar com fonte confiável"],
+          limitations: "Resposta mockada para teste end-to-end.",
+          linkMetadata,
+        },
       }),
     });
   });
@@ -46,7 +85,7 @@ async function runTextAnalysis(page) {
     "URGENTE! Agua quente com limao cura cancer em 3 dias. Compartilhe antes que apaguem.",
   );
   await page.getByRole("button", { name: /Conferir agora/i }).click();
-  await expect(page.getByText(/Resultado final/i)).toBeVisible();
+  await expect(page.getByText(/Resultado confirmado/i)).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -57,6 +96,7 @@ test("analisa texto e mostra laudo curto", async ({ page }) => {
   await runTextAnalysis(page);
 
   await expect(page.getByText(/Risco Alto/i).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Parece absurdo/i })).toBeVisible();
   await expect(page.getByText(/Laudo curto/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Copiar/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /PDF/i })).toBeVisible();
@@ -74,7 +114,7 @@ test("analisa link e mostra confiabilidade da fonte", async ({ page }) => {
   await page.locator("#content-link").fill("https://www.gov.br/saude/pt-br");
   await page.getByRole("button", { name: /Verificar link/i }).click();
 
-  await expect(page.getByText(/Resultado final/i)).toBeVisible();
+  await expect(page.getByText(/Resultado confirmado/i)).toBeVisible();
   await expect(page.getByText(/Dados lidos do link/i)).toBeVisible();
   await expect(page.getByText(/Confiabilidade da fonte/i)).toBeVisible();
 });
@@ -98,8 +138,30 @@ test("aceita upload de foto e gera resultado", async ({ page }, testInfo) => {
   await page.locator("#image-description").fill("Compartilhe antes que apaguem");
   await page.getByRole("button", { name: /Verificar foto/i }).click();
 
-  await expect(page.getByText(/Resultado final/i)).toBeVisible();
+  await expect(page.getByText(/Resultado confirmado/i)).toBeVisible();
   await expect(page.getByText(/Laudo curto/i)).toBeVisible();
+});
+
+test("nao mostra laudo quando verificacao complementar falha", async ({ page }) => {
+  await page.unroute("**/api/analyze");
+  await page.route("**/api/analyze", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: "Mock E2E: verificacao complementar indisponivel.",
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.locator("#content-text").fill("Agua quente com limao cura cancer em 3 dias.");
+  await page.getByRole("button", { name: /Conferir agora/i }).click();
+
+  await expect(page.getByText(/Verificação não concluída/i)).toBeVisible();
+  await expect(page.getByText(/Resultado confirmado/i)).toHaveCount(0);
+  await expect(page.getByText(/Laudo curto/i)).toHaveCount(0);
 });
 
 test("abre pagina visual de relatorio", async ({ page }) => {
