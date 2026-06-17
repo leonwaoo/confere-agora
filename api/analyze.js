@@ -1,4 +1,4 @@
-import { analyzeWithGemini, extractLinkContent, readJsonBody, sendJson } from "./_gemini.js";
+import { analyzeWithGemini, extractLinkContent, readJsonBody, sanitizeErrorForLog, sendJson } from "./_gemini.js";
 
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -61,6 +61,7 @@ export default async function handler(request, response) {
     const analysis = await analyzeWithGemini(payload);
     sendJson(response, 200, { ok: true, analysis });
   } catch (error) {
+    console.warn("[confere-agora] analyze fallback", sanitizeErrorForLog(error));
     const linkMetadata = payload?.mode === "link" ? await extractLinkContent(payload.linkUrl) : null;
 
     sendJson(response, 200, {

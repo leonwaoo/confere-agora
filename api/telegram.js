@@ -1,4 +1,4 @@
-import { analyzeWithGemini, readJsonBody, sendJson } from "./_gemini.js";
+import { analyzeWithGemini, readJsonBody, sanitizeErrorForLog, sendJson } from "./_gemini.js";
 
 const TELEGRAM_API_URL = "https://api.telegram.org";
 const MAX_TELEGRAM_IMAGE_BYTES = 4_000_000;
@@ -240,6 +240,7 @@ export default async function handler(request, response) {
     await sendTelegramMessage(token, chatId, formatAnalysisMessage(analysis));
     sendJson(response, 200, { ok: true });
   } catch (error) {
+    console.warn("[confere-agora] telegram webhook fallback", sanitizeErrorForLog(error));
     const chatId = getMessage(update)?.chat?.id;
 
     if (chatId) {

@@ -389,6 +389,110 @@ function normalizeLinkMetadata(linkContent) {
   };
 }
 
+const fallbackModelIds = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+const HEALTH_CACHE_MS = 5 * 60 * 1000;
+let healthCache = null;
+
+function getModelCandidates(config) {
+  return [...new Set([config.model, ...fallbackModelIds].filter(Boolean))];
+}
+
+export function sanitizeErrorForLog(error) {
+  return cleanText(error?.message || error, 260)
+    .replace(/AIza[0-9A-Za-z_-]+/g, "[redacted-api-key]")
+    .replace(/AQ\.[0-9A-Za-z_.-]+/g, "[redacted-token]");
+}
+
+function shouldTryNextModel(error) {
+  const message = String(error?.message || "").toLowerCase();
+
+  if (/(api key|permission|quota|billing|unauthorized|forbidden)/i.test(message)) {
+    return false;
+  }
+
+  return [400, 404].includes(error?.status);
+}
+
+async function parseServiceError(response) {
+  let details = "";
+
+  try {
+    const data = await response.json();
+    details = data?.error?.message || JSON.stringify(data?.error || data);
+  } catch {
+    details = await response.text().catch(() => "");
+  }
+
+  const error = new Error(
+    cleanText(`Servico de verificacao respondeu com status ${response.status}. ${details}`, 360),
+  );
+  error.status = response.status;
+  return error;
+}
+
+async function checkModel(config, model) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7_000);
+
+  try {
+    const response = await fetch(`${config.baseUrl}/models/${model}`, {
+      method: "GET",
+      headers: {
+        "x-goog-api-key": config.apiKey,
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw await parseServiceError(response);
+    }
+
+    return true;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function checkCloudAiHealth() {
+  const config = getCloudAiConfig();
+
+  if (!config.apiKey) {
+    return { ok: false, needsApiKey: true };
+  }
+
+  const cacheKey = `${config.baseUrl}:${config.model}:${config.apiKey.slice(0, 8)}`;
+
+  if (healthCache?.cacheKey === cacheKey && Date.now() - healthCache.checkedAt < HEALTH_CACHE_MS) {
+    return healthCache.result;
+  }
+
+  let lastError = null;
+
+  for (const model of getModelCandidates(config)) {
+    try {
+      await checkModel(config, model);
+      const result = { ok: true, needsApiKey: false };
+      healthCache = { cacheKey, checkedAt: Date.now(), result };
+      return result;
+    } catch (error) {
+      lastError = error;
+
+      if (!shouldTryNextModel(error)) {
+        break;
+      }
+    }
+  }
+
+  const result = {
+    ok: false,
+    needsApiKey: false,
+    error: "A verificacao complementar nao respondeu agora.",
+  };
+  healthCache = { cacheKey, checkedAt: Date.now(), result };
+  console.warn("[confere-agora] cloud ai health failed", sanitizeErrorForLog(lastError));
+  return result;
+}
+
 function normalizeHostname(hostname) {
   return String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
 }
@@ -661,32 +765,12 @@ export async function extractLinkContent(rawUrl) {
   }
 }
 
-export async function analyzeWithGemini(payload) {
-  const config = getCloudAiConfig();
-
-  if (!config.apiKey) {
-    throw new Error("A verificacao complementar ainda nao esta configurada neste ambiente.");
-  }
-
-  const linkContent = payload.mode === "link" ? await extractLinkContent(payload.linkUrl) : null;
-  const enrichedPayload = linkContent ? { ...payload, linkContent } : payload;
-  const image = parseDataUrl(payload.imageDataUrl);
-  const parts = [{ text: buildPrompt(enrichedPayload) }];
-
-  if (image) {
-    parts.unshift({
-      inline_data: {
-        mime_type: image.mimeType,
-        data: image.data,
-      },
-    });
-  }
-
+async function generateContentWithModel(config, model, parts) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
 
   try {
-    const response = await fetch(`${config.baseUrl}/models/${config.model}:generateContent`, {
+    const response = await fetch(`${config.baseUrl}/models/${model}:generateContent`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -712,18 +796,56 @@ export async function analyzeWithGemini(payload) {
     });
 
     if (!response.ok) {
-      throw new Error(`Servico de verificacao respondeu com status ${response.status}.`);
+      throw await parseServiceError(response);
     }
 
-    const data = await response.json();
-    const text = extractTextFromGemini(data);
-    const parsed = normalizeAnalysis(normalizeGeminiJson(text));
-
-    return {
-      ...parsed,
-      linkMetadata: normalizeLinkMetadata(linkContent),
-    };
+    return response.json();
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function analyzeWithGemini(payload) {
+  const config = getCloudAiConfig();
+
+  if (!config.apiKey) {
+    throw new Error("A verificacao complementar ainda nao esta configurada neste ambiente.");
+  }
+
+  const linkContent = payload.mode === "link" ? await extractLinkContent(payload.linkUrl) : null;
+  const enrichedPayload = linkContent ? { ...payload, linkContent } : payload;
+  const image = parseDataUrl(payload.imageDataUrl);
+  const parts = [{ text: buildPrompt(enrichedPayload) }];
+
+  if (image) {
+    parts.unshift({
+      inline_data: {
+        mime_type: image.mimeType,
+        data: image.data,
+      },
+    });
+  }
+
+  let lastError = null;
+
+  for (const model of getModelCandidates(config)) {
+    try {
+      const data = await generateContentWithModel(config, model, parts);
+      const text = extractTextFromGemini(data);
+      const parsed = normalizeAnalysis(normalizeGeminiJson(text));
+
+      return {
+        ...parsed,
+        linkMetadata: normalizeLinkMetadata(linkContent),
+      };
+    } catch (error) {
+      lastError = error;
+
+      if (!shouldTryNextModel(error)) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error("A verificacao complementar nao respondeu agora.");
 }

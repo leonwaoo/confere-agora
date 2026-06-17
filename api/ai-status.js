@@ -1,4 +1,4 @@
-import { getCloudAiConfig, sendJson } from "./_gemini.js";
+import { checkCloudAiHealth, sendJson } from "./_gemini.js";
 
 export default async function handler(request, response) {
   if (request.method !== "GET") {
@@ -6,10 +6,7 @@ export default async function handler(request, response) {
     return;
   }
 
-  const config = getCloudAiConfig();
+  const health = await checkCloudAiHealth();
 
-  sendJson(response, 200, {
-    ok: Boolean(config.apiKey),
-    needsApiKey: !config.apiKey,
-  });
+  sendJson(response, 200, health);
 }
